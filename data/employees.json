@@ -1,0 +1,24 @@
+[
+  {
+    "id": "1",
+    "name": "Ahmad Rizki",
+    "email": "ahmad@example.com",
+    "userId": "2",
+    "role": "SPG",
+    "status": "Aktif",
+    "joinDate": "2024-01-01",
+    "profilePhoto": "/ahmad-profile.jpg",
+    "createdAt": "2025-11-01T01:17:43.694Z"
+  },
+  {
+    "id": "2",
+    "name": "Budi Santoso",
+    "email": "budi@example.com",
+    "userId": "3",
+    "role": "SPG",
+    "status": "Aktif",
+    "joinDate": "2024-01-05",
+    "profilePhoto": "/budi-profile.jpg",
+    "createdAt": "2025-11-01T01:17:43.695Z"
+  }
+]

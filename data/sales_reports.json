@@ -1,0 +1,30 @@
+[
+  {
+    "spgId": "3",
+    "tanggal": "2025-11-01",
+    "produkId": "3",
+    "produkNama": "Produk C",
+    "penjualanPack": 120,
+    "penjualanKarton": 12,
+    "hargaPack": 300000,
+    "namaTokoTransaksi": "toko saluyu",
+    "notes": "tidak ada",
+    "total": 36000000,
+    "id": "1761961288035",
+    "createdAt": "2025-11-01T01:41:28.035Z"
+  },
+  {
+    "spgId": "2",
+    "tanggal": "2025-12-01",
+    "produkId": "1",
+    "produkNama": "Produk A",
+    "penjualanPack": 3,
+    "penjualanKarton": 5,
+    "hargaPack": 12,
+    "namaTokoTransaksi": "toko saluyu",
+    "notes": "",
+    "total": 36,
+    "id": "1761963929555",
+    "createdAt": "2025-11-01T02:25:29.555Z"
+  }
+]

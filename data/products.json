@@ -1,0 +1,26 @@
+[
+  {
+    "id": "1",
+    "name": "Produk A",
+    "sku": "SKU001",
+    "category": "Kategori 1",
+    "status": "Aktif",
+    "createdAt": "2025-11-01T01:17:43.694Z"
+  },
+  {
+    "id": "2",
+    "name": "Produk B",
+    "sku": "SKU002",
+    "category": "Kategori 2",
+    "status": "Aktif",
+    "createdAt": "2025-11-01T01:17:43.694Z"
+  },
+  {
+    "id": "3",
+    "name": "Produk C",
+    "sku": "SKU003",
+    "category": "Kategori 1",
+    "status": "Aktif",
+    "createdAt": "2025-11-01T01:17:43.694Z"
+  }
+]
