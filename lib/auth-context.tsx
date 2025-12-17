@@ -5,7 +5,7 @@ import { createContext, useContext, useState, useEffect } from "react"
 
 interface User {
   id: string
-  name: string
+  nama: string // ✅ Sesuaikan dengan response API Anda
   email: string
   role: "admin" | "spg"
 }
@@ -15,7 +15,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -27,10 +27,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Check if user is already logged in
     const storedUser = localStorage.getItem("user")
-    if (storedUser) {
+    const token = localStorage.getItem("token")
+    
+    if (storedUser && token) {
       try {
         setUser(JSON.parse(storedUser))
       } catch (error) {
+        console.error("Error parsing user data:", error)
         localStorage.clear()
       }
     }
@@ -46,22 +49,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.error)
+      throw new Error(error.error || "Login gagal")
     }
 
     const data = await response.json()
+    
+    // ✅ Simpan ke localStorage
     localStorage.setItem("token", data.token)
+    localStorage.setItem("role", data.user.role)
     localStorage.setItem("user", JSON.stringify(data.user))
+    
+    // ✅ Update state (tapi ini tidak cukup untuk trigger redirect)
     setUser(data.user)
+    
+    // ✅ PENTING: Hard redirect agar page reload dan protected route bisa cek auth
+    const role = data.user.role.toLowerCase()
+    if (role === "admin") {
+      window.location.href = "/admin/dashboard"
+    } else if (role === "spg") {
+      window.location.href = "/spg/dashboard"
+    }
   }
 
-  const logout = () => {
-    localStorage.clear()
-    setUser(null)
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+    } catch (error) {
+      console.error("Logout error:", error)
+    } finally {
+      localStorage.clear()
+      setUser(null)
+      window.location.href = "/"
+    }
   }
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        isAuthenticated: !!user, 
+        isLoading, 
+        login, 
+        logout 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

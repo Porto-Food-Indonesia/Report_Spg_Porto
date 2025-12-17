@@ -37,6 +37,7 @@ export default function LoginPage() {
 
       if (!response.ok) {
         setError(data.error || "Login gagal")
+        setLoading(false)
         return
       }
 
@@ -47,19 +48,19 @@ export default function LoginPage() {
 
       const role = data.user.role.toLowerCase()
 
-      // Redirect sesuai role
+      // ✅ Gunakan window.location.href untuk hard redirect
       if (role === "admin") {
-        router.push("/admin/dashboard")
+        window.location.href = "/admin/dashboard"
       } else if (role === "spg") {
-        router.push("/spg/dashboard")
+        window.location.href = "/spg/dashboard"
       } else {
         setError("Role tidak valid. Hubungi admin.")
+        setLoading(false)
       }
 
     } catch (err) {
       setError("Terjadi kesalahan saat login.")
       console.error(err)
-    } finally {
       setLoading(false)
     }
   }
