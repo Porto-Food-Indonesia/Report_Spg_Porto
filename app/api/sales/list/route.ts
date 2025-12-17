@@ -16,28 +16,37 @@ export async function GET(request: Request) {
     let allReports
     try {
       allReports = await getAllSalesReports()
-      console.log("✅ getAllSalesReports returned:", typeof allReports, Array.isArray(allReports))
+      console.log(
+        "✅ getAllSalesReports returned:",
+        typeof allReports,
+        Array.isArray(allReports)
+      )
     } catch (dbError) {
       console.error("❌ Database error in getAllSalesReports:", dbError)
       return NextResponse.json([], { 
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { "Content-Type": "application/json" }
       })
     }
 
     // ✅ Validasi adalah array
     if (!Array.isArray(allReports)) {
-      console.error("❌ getAllSalesReports tidak return array:", typeof allReports)
+      console.error(
+        "❌ getAllSalesReports tidak return array:",
+        typeof allReports
+      )
       return NextResponse.json([], { 
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { "Content-Type": "application/json" }
       })
     }
 
     let reports = allReports
-    console.log(`✅ Found ${reports.length} sales records from database`)
+    console.log(
+      `✅ Found ${reports.length} sales records from database`
+    )
 
-    // Filter SPG
+    // 🔍 Filter SPG
     if (spgId && spgId !== "semua") {
       console.log(`🔍 Filtering by SPG ID: "${spgId}"`)
       const beforeCount = reports.length
@@ -45,69 +54,105 @@ export async function GET(request: Request) {
       reports = reports.filter((r) => {
         const reportSpgId = String(r.spg_id)
         const match = reportSpgId === spgId
+
+        if (!match) {
+          console.log(
+            `  ❌ No match: "${reportSpgId}" !== "${spgId}"`
+          )
+        } else {
+          console.log(
+            `  ✅ Match found: "${reportSpgId}" === "${spgId}"`
+          )
+        }
         return match
       })
       
-      console.log(`🔍 SPG Filter: ${beforeCount} → ${reports.length} records`)
+      console.log(
+        `🔍 SPG Filter: ${beforeCount} → ${reports.length} records`
+      )
     }
 
-    // ✅ FIXED: Filter tanggal dengan format YYYY-MM-DD (tanpa waktu)
+    // 📅 Filter tanggal transaksi
     if (startDate && endDate) {
-      console.log(`📅 Date filter input: ${startDate} to ${endDate}`)
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
       
       const beforeCount = reports.length
-      
       reports = reports.filter((r) => {
-        // Ambil tanggal dari database (bisa Date object atau string)
-        const recordDate = r.tanggal instanceof Date ? r.tanggal : new Date(r.tanggal)
-        
-        // Format ke YYYY-MM-DD untuk comparison (hapus waktu)
-        const recordDateStr = recordDate.toISOString().split('T')[0]
-        
-        // Comparison menggunakan string (lebih reliable)
-        const isInRange = recordDateStr >= startDate && recordDateStr <= endDate
-        
-        if (beforeCount <= 10) { // Log detail jika record sedikit
-          console.log(`  📅 Record: ${recordDateStr} | Range: ${startDate} - ${endDate} | Match: ${isInRange}`)
-        }
-        
-        return isInRange
+        const date = new Date(r.tanggal)
+        return date >= start && date <= end
       })
-      
-      console.log(`📅 Date Filter: ${beforeCount} → ${reports.length} records`)
+
+      console.log(
+        `📅 Date Filter: ${beforeCount} → ${reports.length} records`
+      )
     }
 
-    // ✅ Transform data dengan field BARU
-    const transformed = reports.map((r) => ({
-      id: String(r.id),
-      tanggal: r.tanggal instanceof Date ? r.tanggal.toISOString() : new Date(r.tanggal).toISOString(),
-      spgId: String(r.spg_id),
-      spgNama: r.user?.nama || "Unknown",
-      produk: r.produk?.nama || "Unknown",
-      produkId: r.produk_id || 0,
-      produkPcsPerKarton: r.produk?.pcs_per_karton || 1,
-      penjualanKarton: Number(r.penjualan_karton || 0),
-      penjualanPcs: Number(r.penjualan_pcs || 0),
-      hargaKarton: Number(r.harga_karton || 0),
-      hargaPcs: Number(r.harga_pcs || 0),
-      total: Number(r.total || 0),
-      toko: r.nama_toko_transaksi || "Unknown",
-    }))
+    // ✅ TRANSFORM DATA (FULL + FIELD CURAH & PACK/KARTON)
+    const transformed = reports.map((r) => {
+      const produkCategory = r.produk?.category || "Pack/Karton"
+      const isCurah = produkCategory === "Curah"
+      
+      return {
+        id: String(r.id),
 
-    console.log(`✅ Returning ${transformed.length} transformed records`)
+        // 🟢 TANGGAL INPUT (UNTUK EXCEL)
+        created_at: r.created_at
+          ? r.created_at.toISOString()
+          : null,
+
+        // 🟢 TANGGAL TRANSAKSI
+        tanggal: r.tanggal
+          ? r.tanggal.toISOString()
+          : null,
+
+        spgId: String(r.spg_id),
+        spgNama: r.user?.nama || "UNKNOWN",
+
+        produk: r.produk?.nama || "UNKNOWN",
+        produkCategory: produkCategory,
+        produkPcsPerKarton: r.produk?.pcs_per_karton || 1,
+
+        // 🟦 DATA PACK/KARTON (untuk produk non-curah)
+        penjualanKarton: Number(r.penjualan_karton || 0),
+        penjualanPcs: Number(r.penjualan_pcs || 0),
+        hargaKarton: Number(r.harga_karton || 0),
+        hargaPcs: Number(r.harga_pcs || 0), // Untuk pack ATAU per gram (curah)
+
+        // 🟩 DATA CURAH (untuk produk curah, harga tetap di harga_pcs)
+        penjualanGram: Number(r.penjualan_gram || 0),
+
+        // 💰 TOTAL (untuk semua jenis produk)
+        total: Number(r.total || 0),
+        
+        toko: r.nama_toko_transaksi || "UNKNOWN",
+      }
+    })
+
+    console.log(
+      `✅ Returning ${transformed.length} transformed records`
+    )
+    console.log(
+      `📊 Sample data (first record):`,
+      transformed[0] ? JSON.stringify(transformed[0], null, 2) : "No data"
+    )
 
     return NextResponse.json(transformed, {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { "Content-Type": "application/json" }
     })
     
   } catch (error) {
     console.error("❌ API Error (OUTER CATCH):", error)
-    console.error("Error stack:", error instanceof Error ? error.stack : "No stack")
+    console.error(
+      "Error stack:",
+      error instanceof Error ? error.stack : "No stack"
+    )
     
     return NextResponse.json([], {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { "Content-Type": "application/json" }
     })
   }
 }

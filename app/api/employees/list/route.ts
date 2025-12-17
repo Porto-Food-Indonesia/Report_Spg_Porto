@@ -1,26 +1,42 @@
-import { NextResponse } from "next/server"
+// File: /api/employees/list/route.ts
+import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const employees = await prisma.employees.findMany({
-      orderBy: { created_at: "desc" },
+      orderBy: { created_at: 'desc' },
+      select: {
+        id: true,
+        nama: true,
+        email: true,
+        posisi: true,
+        status: true,
+        join_date: true,
+        user_id: true,
+        foto_profil: true,
+      }
     })
 
-    const mappedEmployees = employees.map((e) => ({
-      id: e.id.toString(),
-      name: e.nama,
-      email: e.email || "",
-      role: e.posisi || "spg",
-      status: e.status,
-      joinDate: e.join_date ? e.join_date.toISOString().split("T")[0] : "",
+    // Transform to match frontend expectations
+    const transformedEmployees = employees.map(emp => ({
+      id: emp.id.toString(),
+      name: emp.nama,
+      email: emp.email || '',
+      role: emp.posisi || '',
+      status: emp.status,
+      joinDate: emp.join_date ? emp.join_date.toISOString().split('T')[0] : '',
+      userId: emp.user_id?.toString() || null,
+      profilePhoto: emp.foto_profil || null,
     }))
 
-    return NextResponse.json(mappedEmployees)
+    console.log("📊 Fetched employees:", transformedEmployees.length)
+    
+    return NextResponse.json(transformedEmployees)
   } catch (error) {
-    console.error("[GET /employees] Error:", error)
+    console.error("❌ List employees error:", error)
     return NextResponse.json(
-      { error: "Gagal mengambil data karyawan" },
+      { error: "Failed to fetch employees" },
       { status: 500 }
     )
   }

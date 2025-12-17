@@ -5,20 +5,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Download, FileSpreadsheet } from "lucide-react"
+import { Download, FileSpreadsheet, Weight, CheckCircle2, XCircle } from "lucide-react"
 import * as XLSX from 'xlsx'
 
 interface SalesReport {
   id: string
   tanggal: string
+  created_at: string
   spgId: string
   spgNama: string
   produk: string
-  produkPcsPerKarton: number  // ✅ TAMBAH
-  penjualanKarton: number     // ✅ UBAH
-  penjualanPcs: number        // ✅ UBAH
-  hargaKarton: number         // ✅ UBAH
-  hargaPcs: number            // ✅ UBAH
+  produkCategory: string
+  produkPcsPerKarton: number
+  penjualanKarton: number
+  penjualanPcs: number
+  penjualanGram: number
+  hargaKarton: number
+  hargaPcs: number
   total: number
   toko: string
 }
@@ -29,16 +32,32 @@ interface User {
   role: string
 }
 
+interface Toast {
+  id: number
+  message: string
+  type: 'success' | 'error'
+}
+
 export default function SalesReportView() {
   const [salesData, setSalesData] = useState<SalesReport[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [toasts, setToasts] = useState<Toast[]>([])
   
   // Filter states
   const [selectedSpg, setSelectedSpg] = useState("semua")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+
+  // Toast function
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, message, type }])
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id))
+    }, 3000)
+  }
 
   // Fetch data saat komponen dimuat
   useEffect(() => {
@@ -120,91 +139,121 @@ export default function SalesReportView() {
 
   const handleExportToExcel = () => {
     if (salesData.length === 0) {
-      alert("Tidak ada data untuk diekspor")
+      showToast("Tidak ada data untuk diekspor", "error")
       return
     }
 
     try {
-      // ✅ Siapkan data untuk export dengan field baru
-      const exportData = salesData.map((item, index) => ({
-        'No': index + 1,
-        'Tanggal': new Date(item.tanggal).toLocaleDateString('id-ID'),
-        'SPG': item.spgNama,
-        'Produk': item.produk,
-        'Toko': item.toko,
-        'Karton Terjual': item.penjualanKarton || 0,
-        'Pcs Terjual': item.penjualanPcs || 0,
-        'Total Pcs': (item.penjualanKarton * item.produkPcsPerKarton) + item.penjualanPcs,
-        'Harga/Karton': item.hargaKarton || 0,
-        'Harga/Pcs': item.hargaPcs || 0,
-        'Total': item.total || 0
-      }))
+      const exportData = salesData.map((item, index) => {
+        const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
+        const isCurah = item.produkCategory === "Curah"
+        
+        return {
+          "NO": index + 1,
+          "TANGGAL INPUT": item.created_at 
+            ? new Date(item.created_at).toLocaleString("id-ID", {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              })
+            : "-",
+          "TANGGAL TRANSAKSI": new Date(item.tanggal).toLocaleDateString("id-ID"),
+          "NAMA": item.spgNama,
+          "PRODUK": item.produk,
+          "PACK": isCurah ? "-" : (item.penjualanPcs || 0),
+          "KARTON": isCurah ? "-" : (item.penjualanKarton || 0),
+          "HARGA_PACK": isCurah ? (item.hargaPcs || 0) : (item.hargaPcs || 0),
+          "HARGA_KARTON": isCurah ? "-" : (item.hargaKarton || 0),
+          "STOCK_PACK": isCurah ? "-" : stockPack,
+          "STOCK_KARTON": isCurah ? "-" : (item.penjualanKarton || 0),
+          "TOTAL_SELLOUT": item.total || 0,
+          "TOKO": item.toko || "-",
+          "GRAM": isCurah ? (item.penjualanGram || 0) : "-",
+        }
+      })
 
-      // Buat worksheet
       const worksheet = XLSX.utils.json_to_sheet(exportData)
 
-      // Set column widths
       worksheet['!cols'] = [
-        { wch: 5 },   // No
-        { wch: 12 },  // Tanggal
-        { wch: 20 },  // SPG
-        { wch: 25 },  // Produk
-        { wch: 25 },  // Toko
-        { wch: 12 },  // Karton
-        { wch: 12 },  // Pcs
-        { wch: 12 },  // Total Pcs
-        { wch: 15 },  // Harga Karton
-        { wch: 15 },  // Harga Pcs
-        { wch: 15 },  // Total
+        { wch: 5 },   // NO
+        { wch: 20 },  // TANGGAL INPUT
+        { wch: 18 },  // TANGGAL TRANSAKSI
+        { wch: 20 },  // NAMA
+        { wch: 25 },  // PRODUK
+        { wch: 10 },  // PACK
+        { wch: 10 },  // KARTON
+        { wch: 15 },  // HARGA_PACK
+        { wch: 15 },  // HARGA_KARTON
+        { wch: 15 },  // STOCK_PACK
+        { wch: 15 },  // STOCK_KARTON
+        { wch: 18 },  // TOTAL_SELLOUT
+        { wch: 30 },  // TOKO
+        { wch: 12 },  // GRAM
       ]
 
-      // Buat workbook
       const workbook = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan Penjualan')
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'LAPORAN PENJUALAN')
 
-      // Generate filename dengan filter info
       const spgName = selectedSpg === "semua" ? "Semua_SPG" : users.find(u => u.id === selectedSpg)?.nama || "SPG"
       const dateRange = startDate && endDate 
         ? `${startDate}_to_${endDate}`
         : new Date().toISOString().split('T')[0]
-      const filename = `Laporan_Penjualan_${spgName}_${dateRange}.xlsx`
+      const filename = `LAPORAN_PENJUALAN_${spgName}_${dateRange}.xlsx`
 
-      // Download file
       XLSX.writeFile(workbook, filename)
       
-      alert("Data berhasil diekspor ke Excel!")
+      showToast("Data berhasil diekspor ke Excel!", "success")
     } catch (err) {
       console.error('Export error:', err)
-      alert('Gagal mengekspor data: ' + (err instanceof Error ? err.message : 'Unknown error'))
+      showToast('Gagal mengekspor data', 'error')
     }
   }
 
   const handleExportToCSV = () => {
     if (salesData.length === 0) {
-      alert("Tidak ada data untuk diekspor")
+      showToast("Tidak ada data untuk diekspor", "error")
       return
     }
 
     try {
-      // ✅ Create CSV headers dengan field baru
-      const headers = ["No", "Tanggal", "SPG", "Produk", "Toko", "Karton", "Pcs", "Total Pcs", "Harga Karton", "Harga Pcs", "Total"]
+      const headers = ["NO", "TANGGAL INPUT", "TANGGAL TRANSAKSI", "NAMA", "PRODUK", "PACK", "KARTON", "HARGA_PACK", "HARGA_KARTON", "STOCK_PACK", "STOCK_KARTON", "TOTAL_SELLOUT", "TOKO", "GRAM"]
       
-      // ✅ Create CSV rows dengan field baru
-      const rows = salesData.map((item, index) => [
-        index + 1,
-        new Date(item.tanggal).toLocaleDateString('id-ID'),
-        item.spgNama,
-        item.produk,
-        item.toko,
-        item.penjualanKarton || 0,
-        item.penjualanPcs || 0,
-        (item.penjualanKarton * item.produkPcsPerKarton) + item.penjualanPcs,
-        item.hargaKarton || 0,
-        item.hargaPcs || 0,
-        item.total || 0
-      ])
+      const rows = salesData.map((item, index) => {
+        const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
+        const isCurah = item.produkCategory === "Curah"
+        
+        return [
+          index + 1,
+          item.created_at 
+            ? new Date(item.created_at).toLocaleString('id-ID', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              })
+            : "-",
+          new Date(item.tanggal).toLocaleDateString('id-ID'),
+          item.spgNama,
+          item.produk,
+          isCurah ? "-" : (item.penjualanPcs || 0),
+          isCurah ? "-" : (item.penjualanKarton || 0),
+          isCurah ? (item.hargaPcs || 0) : (item.hargaPcs || 0),
+          isCurah ? "-" : (item.hargaKarton || 0),
+          isCurah ? "-" : stockPack,
+          isCurah ? "-" : (item.penjualanKarton || 0),
+          item.total || 0,
+          item.toko || "-",
+          isCurah ? (item.penjualanGram || 0) : "-"
+        ]
+      })
 
-      // Combine headers and rows
       const csvContent = [
         headers.join(","),
         ...rows.map(row => row.map(cell => {
@@ -216,7 +265,6 @@ export default function SalesReportView() {
         }).join(","))
       ].join("\n")
 
-      // Create and download CSV
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -227,34 +275,69 @@ export default function SalesReportView() {
         ? `${startDate}_to_${endDate}`
         : new Date().toISOString().split('T')[0]
       
-      link.download = `Laporan_Penjualan_${spgName}_${dateRange}.csv`
+      link.download = `LAPORAN_PENJUALAN_${spgName}_${dateRange}.csv`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
 
-      alert("Data berhasil diekspor ke CSV!")
+      showToast("Data berhasil diekspor ke CSV!", "success")
     } catch (err) {
       console.error('Export CSV error:', err)
-      alert('Gagal mengekspor data: ' + (err instanceof Error ? err.message : 'Unknown error'))
+      showToast('Gagal mengekspor data', 'error')
     }
   }
 
-  // ✅ Hitung total dengan safe checking
   const totalRevenue = Array.isArray(salesData) 
     ? salesData.reduce((sum, item) => sum + (item.total || 0), 0)
     : 0
 
   const totalPcs = Array.isArray(salesData)
-    ? salesData.reduce((sum, item) => sum + ((item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)) + (item.penjualanPcs || 0), 0)
+    ? salesData.reduce((sum, item) => {
+        if (item.produkCategory === "Curah") return sum
+        return sum + (item.penjualanPcs || 0)
+      }, 0)
     : 0
 
   const totalKarton = Array.isArray(salesData)
-    ? salesData.reduce((sum, item) => sum + (item.penjualanKarton || 0), 0)
+    ? salesData.reduce((sum, item) => {
+        if (item.produkCategory === "Curah") return sum
+        return sum + (item.penjualanKarton || 0)
+      }, 0)
+    : 0
+
+  const totalGram = Array.isArray(salesData)
+    ? salesData.reduce((sum, item) => {
+        if (item.produkCategory === "Curah") {
+          return sum + (item.penjualanGram || 0)
+        }
+        return sum
+      }, 0)
     : 0
 
   return (
     <div className="space-y-6">
+      {/* Toast Container */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg animate-in slide-in-from-top-5 duration-300 ${
+              toast.type === 'success' 
+                ? 'bg-green-500 text-white' 
+                : 'bg-red-500 text-white'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            ) : (
+              <XCircle className="w-5 h-5 flex-shrink-0" />
+            )}
+            <p className="text-sm font-medium">{toast.message}</p>
+          </div>
+        ))}
+      </div>
+
       {/* Filter Section */}
       <Card>
         <CardHeader>
@@ -327,7 +410,7 @@ export default function SalesReportView() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Total Transaksi</CardTitle>
@@ -350,10 +433,22 @@ export default function SalesReportView() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Total Pcs Terjual</CardTitle>
+            <CardTitle className="text-sm">Total Pack Terjual</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{totalPcs.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Weight className="w-4 h-4" />
+              Total Gram (Curah)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{totalGram.toLocaleString()}</p>
           </CardContent>
         </Card>
 
@@ -394,39 +489,97 @@ export default function SalesReportView() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-slate-50">
-                    <th className="px-4 py-3 text-left text-sm font-medium">Tanggal</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">Tanggal Input</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">Tanggal Transaksi</th>
                     <th className="px-4 py-3 text-left text-sm font-medium">SPG</th>
                     <th className="px-4 py-3 text-left text-sm font-medium">Produk</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">Kategori</th>
                     <th className="px-4 py-3 text-left text-sm font-medium">Toko</th>
+                    <th className="px-4 py-3 text-right text-sm font-medium">Pack</th>
                     <th className="px-4 py-3 text-right text-sm font-medium">Karton</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Pcs</th>
+                    <th className="px-4 py-3 text-right text-sm font-medium">Harga Pack</th>
                     <th className="px-4 py-3 text-right text-sm font-medium">Harga Karton</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Harga Pcs</th>
+                    <th className="px-4 py-3 text-right text-sm font-medium">Stock Pack</th>
+                    <th className="px-4 py-3 text-right text-sm font-medium">Stock Karton</th>
                     <th className="px-4 py-3 text-right text-sm font-medium">Total</th>
+                    <th className="px-4 py-3 text-right text-sm font-medium">Gram</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {salesData.map((item) => (
-                    <tr key={item.id} className="border-b hover:bg-slate-50">
-                      <td className="px-4 py-3 text-sm">
-                        {new Date(item.tanggal).toLocaleDateString("id-ID")}
-                      </td>
-                      <td className="px-4 py-3 text-sm">{item.spgNama}</td>
-                      <td className="px-4 py-3 text-sm">{item.produk}</td>
-                      <td className="px-4 py-3 text-sm">{item.toko}</td>
-                      <td className="px-4 py-3 text-sm text-right">{item.penjualanKarton || 0}</td>
-                      <td className="px-4 py-3 text-sm text-right">{item.penjualanPcs || 0}</td>
-                      <td className="px-4 py-3 text-sm text-right">
-                        Rp {(item.hargaKarton || 0).toLocaleString("id-ID")}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right">
-                        Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right font-medium text-blue-600">
-                        Rp {(item.total || 0).toLocaleString("id-ID")}
-                      </td>
-                    </tr>
-                  ))}
+                  {salesData.map((item) => {
+                    const isCurah = item.produkCategory === "Curah"
+                    const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
+                    return (
+                      <tr key={item.id} className="border-b hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm">
+                          {item.created_at 
+                            ? new Date(item.created_at).toLocaleString("id-ID", {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                              })
+                            : "-"
+                          }
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {new Date(item.tanggal).toLocaleDateString("id-ID")}
+                        </td>
+                        <td className="px-4 py-3 text-sm">{item.spgNama}</td>
+                        <td className="px-4 py-3 text-sm">{item.produk}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                            isCurah 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {isCurah && <Weight className="w-3 h-3" />}
+                            {item.produkCategory || "Pack/Karton"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{item.toko}</td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          {isCurah ? "-" : (item.penjualanPcs || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          {isCurah ? "-" : (item.penjualanKarton || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          {isCurah ? (
+                            <span className="font-semibold text-green-700">
+                              Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}
+                              <div className="text-xs text-slate-500">(Total Curah)</div>
+                            </span>
+                          ) : (
+                            <span>Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          {isCurah ? "-" : (
+                            <span>Rp {(item.hargaKarton || 0).toLocaleString("id-ID")}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          {isCurah ? "-" : stockPack}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          {isCurah ? "-" : (item.penjualanKarton || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-medium text-blue-600">
+                          Rp {(item.total || 0).toLocaleString("id-ID")}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          {isCurah ? (
+                            <span className="font-semibold text-green-700">
+                              {(item.penjualanGram || 0).toLocaleString()} gr
+                            </span>
+                          ) : "-"}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

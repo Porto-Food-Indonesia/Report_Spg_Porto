@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Edit2, Trash2, Package } from 'lucide-react';
+import { Plus, Edit2, Trash2, Package, Weight } from 'lucide-react';
 
 // ✅ Type Definition
 interface Product {
@@ -12,6 +12,7 @@ interface Product {
   sku: string;
   category: string;
   pcs_per_karton: number;
+  gram_per_pcs: number | null;
   status: string;
   created_at?: Date;
 }
@@ -20,7 +21,7 @@ interface FormData {
   nama: string;
   sku: string;
   category: string;
-  pcs_per_karton: number;
+  pack_per_karton: number;
   status: string;
 }
 
@@ -32,8 +33,8 @@ export default function ProductManagementView() {
   const [formData, setFormData] = useState<FormData>({
     nama: "",
     sku: "",
-    category: "",
-    pcs_per_karton: 1,
+    category: "Pack/Karton",
+    pack_per_karton: 1,
     status: "Aktif",
   });
   const [error, setError] = useState('');
@@ -63,8 +64,9 @@ export default function ProductManagementView() {
       return;
     }
 
-    if (!formData.pcs_per_karton || formData.pcs_per_karton < 1) {
-      setError('Jumlah pcs per karton harus diisi minimal 1');
+    // Validasi untuk produk Pack/Karton
+    if (formData.category === "Pack/Karton" && (!formData.pack_per_karton || formData.pack_per_karton < 1)) {
+      setError('Untuk produk Pack/Karton, jumlah pack per karton harus diisi minimal 1');
       return;
     }
 
@@ -75,16 +77,21 @@ export default function ProductManagementView() {
       const method = editingId ? 'PUT' : 'POST';
       const url = '/api/products/create';
 
+      const dataToSend = {
+        ...formData,
+        pack_per_karton: formData.category === "Pack/Karton" ? formData.pack_per_karton : null
+      };
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingId ? { id: editingId, ...formData } : formData),
+        body: JSON.stringify(editingId ? { id: editingId, ...dataToSend } : dataToSend),
       });
 
       if (!response.ok) throw new Error('Gagal menyimpan produk');
 
       setSuccess(editingId ? 'Produk berhasil diperbarui!' : 'Produk berhasil ditambahkan!');
-      setFormData({ nama: '', sku: '', category: '', pcs_per_karton: 1, status: 'Aktif' });
+      setFormData({ nama: '', sku: '', category: 'Pack/Karton', pack_per_karton: 1, status: 'Aktif' });
       setEditingId(null);
       setShowForm(false);
       await fetchProducts();
@@ -100,7 +107,7 @@ export default function ProductManagementView() {
       nama: product.nama,
       sku: product.sku,
       category: product.category,
-      pcs_per_karton: product.pcs_per_karton || 1,
+      pack_per_karton: product.pcs_per_karton || 1,
       status: product.status,
     });
     setEditingId(product.id);
@@ -131,10 +138,12 @@ export default function ProductManagementView() {
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData({ nama: '', sku: '', category: '', pcs_per_karton: 1, status: 'Aktif' });
+    setFormData({ nama: '', sku: '', category: 'Pack/Karton', pack_per_karton: 1, status: 'Aktif' });
     setError('');
     setSuccess('');
   };
+
+  const isCurah = formData.category === "Curah";
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
@@ -150,7 +159,7 @@ export default function ProductManagementView() {
             <CardHeader>
               <CardTitle>{editingId ? 'Edit Produk' : 'Tambah Produk Baru'}</CardTitle>
               <CardDescription>
-                Input data produk dan tentukan berapa pcs dalam 1 karton. Harga akan diinput oleh SPG saat membuat laporan.
+                Pilih kategori: Pack/Karton untuk produk standar dengan konversi karton, atau Curah untuk produk yang dijual per gram
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -178,34 +187,71 @@ export default function ProductManagementView() {
                     className="bg-white border-slate-200"
                   />
                 </div>
+
+                {/* ✅ KATEGORI CURAH / PACK */}
                 <div className="space-y-2">
-                  <Label htmlFor="category">Kategori *</Label>
-                  <Input
-                    id="category"
-                    placeholder="Contoh: Frozen Food"
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="bg-white border-slate-200"
-                  />
+                  <Label htmlFor="category">Kategori Produk *</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, category: 'Pack/Karton' })}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        formData.category === 'Pack/Karton'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Package className={`w-5 h-5 ${
+                          formData.category === 'Pack/Karton' ? 'text-blue-600' : 'text-slate-400'
+                        }`} />
+                        <div className="text-left">
+                          <div className="font-semibold text-sm">Pack/Karton</div>
+                          <div className="text-xs text-slate-500">Dijual utuh</div>
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, category: 'Curah' })}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        formData.category === 'Curah'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Weight className={`w-5 h-5 ${
+                          formData.category === 'Curah' ? 'text-green-600' : 'text-slate-400'
+                        }`} />
+                        <div className="text-left">
+                          <div className="font-semibold text-sm">Curah</div>
+                          <div className="text-xs text-slate-500">Per gram</div>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
                 </div>
                 
-                {/* ✅ INPUT PCS PER KARTON */}
-                <div className="space-y-2">
-                  <Label htmlFor="pcs_per_karton" className="flex items-center gap-2">
-                    <Package className="w-4 h-4" />
-                    Jumlah Pcs per Karton *
-                  </Label>
-                  <Input
-                    id="pcs_per_karton"
-                    type="number"
-                    min="1"
-                    placeholder="Contoh: 15"
-                    value={formData.pcs_per_karton}
-                    onChange={(e) => setFormData({ ...formData, pcs_per_karton: parseInt(e.target.value) || 1 })}
-                    className="bg-white border-slate-200"
-                  />
-                  <p className="text-xs text-slate-500">1 karton = berapa pcs?</p>
-                </div>
+                {/* ✅ INPUT PACK PER KARTON (hanya untuk Pack/Karton) */}
+                {!isCurah && (
+                  <div className="space-y-2">
+                    <Label htmlFor="pack_per_karton" className="flex items-center gap-2">
+                      <Package className="w-4 h-4" />
+                      Jumlah Pack per Karton *
+                    </Label>
+                    <Input
+                      id="pack_per_karton"
+                      type="number"
+                      min="1"
+                      placeholder="Contoh: 15"
+                      value={formData.pack_per_karton}
+                      onChange={(e) => setFormData({ ...formData, pack_per_karton: parseInt(e.target.value) || 1 })}
+                      className="bg-white border-slate-200"
+                    />
+                    <p className="text-xs text-slate-500">1 karton = berapa pack?</p>
+                  </div>
+                )}
                 
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
@@ -221,10 +267,20 @@ export default function ProductManagementView() {
                 </div>
               </div>
 
-              {/* Preview Karton */}
-              {formData.pcs_per_karton > 1 && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
-                  <strong>Preview:</strong> 1 karton {formData.nama || 'produk ini'} = {formData.pcs_per_karton} pcs
+              {/* Preview Konversi */}
+              {!isCurah && formData.pack_per_karton > 1 && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+                  <div className="font-semibold text-blue-900 text-sm">Preview Konversi:</div>
+                  <div className="text-sm text-blue-800 mt-1">
+                    1 karton = {formData.pack_per_karton} pack
+                  </div>
+                </div>
+              )}
+
+              {/* Info Kategori Curah */}
+              {isCurah && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                  <strong>Info Produk Curah:</strong> Produk ini akan dijual per gram. SPG akan input jumlah gram saat membuat laporan penjualan.
                 </div>
               )}
 
@@ -240,12 +296,12 @@ export default function ProductManagementView() {
           </Card>
         )}
 
-        {/* ✅ Tabel Produk dengan kolom Pcs/Karton */}
+        {/* ✅ Tabel Produk dengan kolom Kategori dan Gram */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Daftar Produk</CardTitle>
-              <CardDescription>Kelola master data produk dan konversi karton</CardDescription>
+              <CardDescription>Kelola master data produk dengan kategori Pack/Karton dan Curah</CardDescription>
             </div>
             {!showForm && (
               <Button onClick={() => setShowForm(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
@@ -264,11 +320,17 @@ export default function ProductManagementView() {
                     <tr className="border-b bg-slate-50">
                       <th className="px-4 py-3 text-left text-sm font-medium">Nama Produk</th>
                       <th className="px-4 py-3 text-left text-sm font-medium">SKU</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Kategori</th>
+                      <th className="px-4 py-3 text-center text-sm font-medium">Kategori</th>
                       <th className="px-4 py-3 text-center text-sm font-medium">
                         <div className="flex items-center justify-center gap-1">
                           <Package className="w-4 h-4" />
-                          Pcs/Karton
+                          Pack/Karton
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 text-center text-sm font-medium">
+                        <div className="flex items-center justify-center gap-1">
+                          <Weight className="w-4 h-4" />
+                          Gram/Pack
                         </div>
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
@@ -281,12 +343,38 @@ export default function ProductManagementView() {
                         <tr key={product.id} className="border-b hover:bg-slate-50">
                           <td className="px-4 py-3 text-sm font-medium">{product.nama}</td>
                           <td className="px-4 py-3 text-sm">{product.sku}</td>
-                          <td className="px-4 py-3 text-sm">{product.category}</td>
                           <td className="px-4 py-3 text-center">
-                            <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-800 rounded-full text-sm font-semibold">
-                              <Package className="w-3 h-3" />
-                              {product.pcs_per_karton || 1} pcs
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                              product.category === 'Curah' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {product.category === 'Curah' ? (
+                                <Weight className="w-3 h-3" />
+                              ) : (
+                                <Package className="w-3 h-3" />
+                              )}
+                              {product.category}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {product.category === 'Pack/Karton' ? (
+                              <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-800 rounded-full text-sm font-semibold">
+                                {product.pcs_per_karton || 1} pack
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {product.category === 'Curah' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded text-xs font-medium">
+                                <Weight className="w-3 h-3" />
+                                Per gram
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <span
@@ -323,7 +411,7 @@ export default function ProductManagementView() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                           Belum ada produk. Klik tombol "Tambah Produk" untuk menambahkan produk baru.
                         </td>
                       </tr>

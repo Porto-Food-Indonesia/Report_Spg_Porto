@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"   
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -15,17 +15,21 @@ model users {
   role       String      @default("spg")
   created_at DateTime    @default(now())
   penjualan  penjualan[]
+  stok_spg   stok_spg[]
+  employee   employees?  @relation("UserToEmployee")
 }
 
 model produk {
-  id              Int         @id @default(autoincrement())
-  nama            String
-  sku             String?
-  category        String?
-  pcs_per_karton  Int         @default(1)
-  status          String      @default("Aktif")
-  created_at      DateTime    @default(now())
-  penjualan       penjualan[]
+  id             Int         @id @default(autoincrement())
+  nama           String
+  sku            String?
+  category       String?
+  status         String      @default("Aktif")
+  created_at     DateTime    @default(now())
+  pcs_per_karton Int         @default(1)
+  gram_per_pcs   Int?
+  penjualan      penjualan[]
+  stok_spg       stok_spg[]
 }
 
 model penjualan {
@@ -34,29 +38,55 @@ model penjualan {
   produk_id           Int
   tanggal             DateTime
   penjualan_karton    Int      @default(0)
-  penjualan_pcs       Int      @default(0)
-  harga_karton        Decimal  @default(0)
-  harga_pcs           Decimal  @default(0)
   nama_toko_transaksi String
   notes               String?
   total               Decimal
   created_at          DateTime @default(now())
-
+  harga_karton        Decimal  @default(0)
+  harga_pcs           Decimal  @default(0)
+  penjualan_pcs       Int      @default(0)
+  harga_per_gram      Decimal  @default(0)
+  penjualan_gram      Int      @default(0)
   produk              produk   @relation(fields: [produk_id], references: [id])
   user                users    @relation(fields: [spg_id], references: [id])
 
   @@index([produk_id])
   @@index([spg_id])
+  @@index([tanggal])
+}
+
+model stok_spg {
+  id             Int      @id @default(autoincrement())
+  spg_id         Int
+  produk_id      Int
+  stok_karton    Int      @default(0)
+  stok_pcs       Int      @default(0)
+  stok_gram      Int      @default(0)
+  tanggal_update DateTime @default(now())
+  keterangan     String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  produk         produk   @relation(fields: [produk_id], references: [id])
+  user           users    @relation(fields: [spg_id], references: [id])
+
+  @@unique([spg_id, produk_id])
+  @@index([produk_id])
+  @@index([spg_id])
 }
 
 model employees {
-  id         Int       @id @default(autoincrement())
-  nama       String
-  email      String?
-  posisi     String?
-  kontak     String?
-  alamat     String?
-  status     String    @default("Aktif")
-  join_date  DateTime?
-  created_at DateTime  @default(now())
+  id           Int       @id @default(autoincrement())
+  nama         String
+  email        String?
+  posisi       String?
+  kontak       String?
+  alamat       String?
+  status       String    @default("Aktif")
+  join_date    DateTime?
+  user_id      Int?      @unique
+  foto_profil  String?   @db.Text
+  created_at   DateTime  @default(now())
+  user         users?    @relation("UserToEmployee", fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
 }

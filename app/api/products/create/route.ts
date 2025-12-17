@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     console.log('=== POST /products/create ===', body)
     
-    const { nama, sku, category, pcs_per_karton, status } = body
+    const { nama, sku, category, pack_per_karton, status } = body
 
     if (!nama || !sku || !category) {
       return NextResponse.json(
@@ -18,12 +18,14 @@ export async function POST(request: Request) {
       )
     }
 
-    // ✅ Validasi pcs_per_karton
-    if (!pcs_per_karton || pcs_per_karton < 1) {
-      return NextResponse.json(
-        { error: "Jumlah pcs per karton minimal 1" },
-        { status: 400 }
-      )
+    // ✅ Validasi pack_per_karton hanya untuk produk Pack/Karton
+    if (category === "Pack/Karton") {
+      if (!pack_per_karton || pack_per_karton < 1) {
+        return NextResponse.json(
+          { error: "Untuk produk Pack/Karton, jumlah pack per karton minimal 1" },
+          { status: 400 }
+        )
+      }
     }
 
     const product = await prisma.produk.create({
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
         nama,
         sku,
         category,
-        pcs_per_karton: Number(pcs_per_karton),  // ✅ TAMBAH
+        pcs_per_karton: category === "Pack/Karton" ? Number(pack_per_karton) : 1,
         status: status || "Aktif",
       },
     })
@@ -57,7 +59,7 @@ export async function PUT(request: Request) {
     const body = await request.json()
     console.log('=== PUT /products/create ===', body)
     
-    const { id, nama, sku, category, pcs_per_karton, status } = body
+    const { id, nama, sku, category, pack_per_karton, status } = body
 
     if (!id) {
       return NextResponse.json(
@@ -66,15 +68,31 @@ export async function PUT(request: Request) {
       )
     }
 
+    // ✅ Validasi pack_per_karton hanya untuk produk Pack/Karton
+    if (category === "Pack/Karton" && pack_per_karton && pack_per_karton < 1) {
+      return NextResponse.json(
+        { error: "Jumlah pack per karton minimal 1" },
+        { status: 400 }
+      )
+    }
+
+    const updateData: any = {}
+    
+    if (nama) updateData.nama = nama
+    if (sku) updateData.sku = sku
+    if (category) updateData.category = category
+    if (status) updateData.status = status
+    
+    // ✅ Update pack_per_karton sesuai kategori
+    if (category === "Pack/Karton" && pack_per_karton) {
+      updateData.pcs_per_karton = Number(pack_per_karton)
+    } else if (category === "Curah") {
+      updateData.pcs_per_karton = 1  // Set default untuk curah
+    }
+
     const product = await prisma.produk.update({
       where: { id: Number(id) },
-      data: {
-        ...(nama && { nama }),
-        ...(sku && { sku }),
-        ...(category && { category }),
-        ...(pcs_per_karton && { pcs_per_karton: Number(pcs_per_karton) }),  // ✅ TAMBAH
-        ...(status && { status }),
-      },
+      data: updateData,
     })
 
     return NextResponse.json(product)

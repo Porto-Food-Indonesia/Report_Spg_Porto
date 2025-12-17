@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Upload, CheckCircle, Lock } from "lucide-react"
+import { Plus, Edit2, Upload, CheckCircle, Lock, X, Check } from "lucide-react"
 
 interface Employee {
   id: string
@@ -15,6 +15,40 @@ interface Employee {
   profilePhoto?: string | null
 }
 
+// ==================== TOAST NOTIFICATION COMPONENT ====================
+function Toast({ message, onClose }: { message: string; onClose: () => void }) {
+  useEffect(() => {
+    // Auto close after 3 seconds
+    const timer = setTimeout(() => {
+      onClose()
+    }, 3000)
+
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-slideIn">
+      <div className="bg-white rounded-lg shadow-2xl border-l-4 border-green-500 p-4 flex items-center gap-3 min-w-[300px] max-w-md">
+        <div className="flex-shrink-0">
+          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+            <Check className="w-6 h-6 text-green-600" />
+          </div>
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-slate-900">Berhasil!</p>
+          <p className="text-sm text-slate-600">{message}</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function EmployeeManagementView() {
   const [showForm, setShowForm] = useState(false)
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -23,6 +57,7 @@ export default function EmployeeManagementView() {
   const [error, setError] = useState("")
   const [showPasswordModal, setShowPasswordModal] = useState<string | null>(null)
   const [showPhotoUpload, setShowPhotoUpload] = useState<string | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -52,8 +87,6 @@ export default function EmployeeManagementView() {
       const response = await fetch("/api/employees/list")
       if (!response.ok) throw new Error("Gagal mengambil data")
       const data = await response.json()
-      console.log("📊 Data karyawan dari API:", data)
-      console.log("📊 Jumlah karyawan:", data.length)
       setEmployees(data)
     } catch (err) {
       setError("Gagal mengambil data karyawan")
@@ -102,20 +135,15 @@ export default function EmployeeManagementView() {
         })
         
         if (!response.ok) {
-          let errorMessage = "Gagal update karyawan"
-          try {
-            const errorData = await response.json()
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            errorMessage = `HTTP Error ${response.status}: ${response.statusText}`
-          }
-          throw new Error(errorMessage)
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || "Gagal memperbarui data karyawan")
         }
         
         const message = formData.changePassword 
           ? "Data karyawan dan password berhasil diperbarui!" 
           : "Data karyawan berhasil diperbarui!"
-        alert(message)
+        setToastMessage(message)
+        
       } else {
         const response = await fetch("/api/employees/create", {
           method: "POST",
@@ -132,17 +160,11 @@ export default function EmployeeManagementView() {
         })
         
         if (!response.ok) {
-          let errorMessage = "Gagal tambah karyawan"
-          try {
-            const errorData = await response.json()
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            errorMessage = `HTTP Error ${response.status}: ${response.statusText}`
-          }
-          throw new Error(errorMessage)
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || "Gagal menambahkan karyawan baru")
         }
         
-        alert("Karyawan berhasil ditambahkan!")
+        setToastMessage("Karyawan baru berhasil ditambahkan!")
       }
       
       setFormData({
@@ -160,8 +182,9 @@ export default function EmployeeManagementView() {
       setShowForm(false)
       setError("")
       await fetchEmployees()
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan")
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan data")
       console.error("Save employee error:", err)
     }
   }
@@ -190,8 +213,6 @@ export default function EmployeeManagementView() {
     }
 
     try {
-      console.log("🔑 Attempting password change for userId:", userId)
-      
       const response = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -202,36 +223,29 @@ export default function EmployeeManagementView() {
         }),
       })
 
-      console.log("📡 Response status:", response.status)
-
       if (!response.ok) {
-        let errorMessage = "Gagal mengubah password"
-        try {
-          const data = await response.json()
-          console.log("❌ Error response:", data)
-          errorMessage = data.error || errorMessage
-        } catch {
-          errorMessage = `HTTP Error ${response.status}: ${response.statusText}`
-        }
-        throw new Error(errorMessage)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Gagal mengubah password")
       }
-
-      const result = await response.json()
-      console.log("✅ Password changed successfully:", result)
 
       setError("")
       setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
       setShowPasswordModal(null)
-      alert("Password berhasil diubah!")
+      setToastMessage("Password berhasil diubah!")
+      
     } catch (err) {
-      console.error("❌ Change password error:", err)
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan")
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan saat mengubah password")
     }
   }
 
   const handlePhotoUpload = async (employeeId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Ukuran file terlalu besar. Maksimal 5MB")
+      return
+    }
 
     try {
       const reader = new FileReader()
@@ -244,16 +258,19 @@ export default function EmployeeManagementView() {
           body: JSON.stringify({ employeeId, photoUrl }),
         })
 
-        if (!response.ok) throw new Error("Gagal upload foto")
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || "Gagal mengupload foto")
+        }
 
         setError("")
         setShowPhotoUpload(null)
         await fetchEmployees()
-        alert("Foto profil berhasil diperbarui!")
+        setToastMessage("Foto profil berhasil diperbarui!")
       }
       reader.readAsDataURL(file)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal upload foto")
+      setError(err instanceof Error ? err.message : "Gagal mengupload foto profil")
     }
   }
 
@@ -297,21 +314,15 @@ export default function EmployeeManagementView() {
       })
       
       if (!response.ok) {
-        let errorMessage = "Gagal mengubah status karyawan"
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          errorMessage = `HTTP Error ${response.status}: ${response.statusText}`
-        }
-        throw new Error(errorMessage)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Gagal mengubah status karyawan")
       }
       
       await fetchEmployees()
-      alert(`Status karyawan berhasil diubah menjadi ${newStatus}`)
+      setToastMessage(`Status karyawan berhasil diubah menjadi ${newStatus}`)
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan")
-      console.error("Toggle status error:", err)
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan saat mengubah status")
     }
   }
 
@@ -335,6 +346,16 @@ export default function EmployeeManagementView() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* ==================== TOAST NOTIFICATION ==================== */}
+        {toastMessage && (
+          <Toast
+            message={toastMessage}
+            onClose={() => setToastMessage(null)}
+          />
+        )}
+
+        {/* ==================== PASSWORD CHANGE MODAL ==================== */}
         {showPasswordModal && (
           <div className="bg-white rounded-lg shadow-lg border border-blue-200 overflow-hidden">
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
@@ -345,7 +366,11 @@ export default function EmployeeManagementView() {
               <p className="text-blue-100 text-sm mt-1">Memerlukan password lama untuk verifikasi</p>
             </div>
             <div className="p-6 space-y-4">
-              {error && <div className="p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm">{error}</div>}
+              {error && (
+                <div className="p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700">Password Saat Ini</label>
                 <input
@@ -398,6 +423,7 @@ export default function EmployeeManagementView() {
           </div>
         )}
 
+        {/* ==================== PHOTO UPLOAD MODAL ==================== */}
         {showPhotoUpload && (
           <div className="bg-white rounded-lg shadow-lg border border-green-200 overflow-hidden">
             <div className="bg-gradient-to-r from-green-500 to-green-600 px-6 py-4">
@@ -407,6 +433,11 @@ export default function EmployeeManagementView() {
               </h2>
             </div>
             <div className="p-6 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700">Pilih Foto</label>
                 <input
@@ -418,22 +449,30 @@ export default function EmployeeManagementView() {
                 <p className="text-xs text-slate-600">Format: JPG, PNG. Ukuran maksimal: 5MB</p>
               </div>
               <button
-                onClick={() => setShowPhotoUpload(null)}
+                onClick={() => {
+                  setShowPhotoUpload(null)
+                  setError("")
+                }}
                 className="px-4 py-2 border border-slate-300 rounded-md hover:bg-slate-50 transition"
               >
-                Selesai
+                Tutup
               </button>
             </div>
           </div>
         )}
 
+        {/* ==================== FORM ADD/EDIT EMPLOYEE ==================== */}
         {showForm && (
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4">
               <h2 className="text-xl font-bold text-white">{editingId ? "Edit Karyawan" : "Tambah Karyawan Baru"}</h2>
             </div>
             <div className="p-6 space-y-4">
-              {error && <div className="p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm">{error}</div>}
+              {error && (
+                <div className="p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-slate-700">Nama Lengkap *</label>
@@ -572,6 +611,7 @@ export default function EmployeeManagementView() {
           </div>
         )}
 
+        {/* ==================== EMPLOYEE LIST TABLE ==================== */}
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 flex justify-between items-center">
             <div>
@@ -704,6 +744,22 @@ export default function EmployeeManagementView() {
           </div>
         </div>
       </div>
+      
+      <style jsx>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
-import { Package, Calculator, AlertCircle, CheckCircle2, TrendingUp, ShoppingBag, DollarSign, Calendar } from "lucide-react"
+import { Package, Calculator, AlertCircle, CheckCircle2, TrendingUp, ShoppingBag, DollarSign, Calendar, Weight, Box } from "lucide-react"
 
 interface Product {
   id: number
@@ -22,17 +22,28 @@ interface Product {
 export default function SalesReportForm() {
   const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   
+  // Kategori produk
+  const [selectedCategory, setSelectedCategory] = useState("Pack/Karton")
+  
   const [formData, setFormData] = useState({
     tanggal: new Date().toISOString().split("T")[0],
     produkId: "",
+    // Pack/Karton
     totalPcs: "",
     hargaPcs: "",
     hargaKarton: "",
+    stockPack: "",
+    stockKarton: "",
+    // Curah (Simplified - no per gram calculation)
+    totalGram: "",
+    totalHargaCurah: "",
+    // Common
     namaTokoTransaksi: "",
     notes: "",
   })
@@ -49,6 +60,29 @@ export default function SalesReportForm() {
   useEffect(() => {
     fetchProducts()
   }, [])
+
+  // Filter produk berdasarkan kategori
+  useEffect(() => {
+    const filtered = products.filter(p => p.category === selectedCategory)
+    setFilteredProducts(filtered)
+    
+    // Reset form ketika ganti kategori
+    setFormData({
+      tanggal: formData.tanggal,
+      produkId: "",
+      totalPcs: "",
+      hargaPcs: "",
+      hargaKarton: "",
+      stockPack: "",
+      stockKarton: "",
+      totalGram: "",
+      totalHargaCurah: "",
+      namaTokoTransaksi: formData.namaTokoTransaksi,
+      notes: formData.notes,
+    })
+    setSelectedProduct(null)
+    setConvertResult(null)
+  }, [selectedCategory, products])
 
   const fetchProducts = async () => {
     try {
@@ -70,18 +104,25 @@ export default function SalesReportForm() {
     }
   }
 
-  // Auto-convert
+  // Auto-convert untuk Pack/Karton
   useEffect(() => {
-    if (selectedProduct && formData.totalPcs && formData.hargaPcs && formData.hargaKarton) {
+    if (selectedCategory === "Pack/Karton" && selectedProduct && formData.totalPcs && formData.hargaPcs) {
       const totalPcs = Number(formData.totalPcs)
       const hargaPcs = Number(formData.hargaPcs)
-      const hargaKarton = Number(formData.hargaKarton)
+      const hargaKarton = formData.hargaKarton ? Number(formData.hargaKarton) : 0
       const pcsPerKarton = selectedProduct.pcs_per_karton
 
-      if (totalPcs > 0 && hargaPcs > 0 && hargaKarton > 0 && pcsPerKarton > 0) {
+      if (totalPcs > 0 && hargaPcs > 0 && pcsPerKarton > 0) {
         const karton = Math.floor(totalPcs / pcsPerKarton)
         const sisaPcs = totalPcs % pcsPerKarton
-        const total = (karton * hargaKarton) + (sisaPcs * hargaPcs)
+        
+        // Hitung total: jika ada harga karton, pakai itu. Jika tidak, hitung semua sebagai pack
+        let total = 0
+        if (hargaKarton > 0) {
+          total = (karton * hargaKarton) + (sisaPcs * hargaPcs)
+        } else {
+          total = totalPcs * hargaPcs
+        }
 
         setConvertResult({ karton, sisaPcs, total })
       } else {
@@ -90,10 +131,10 @@ export default function SalesReportForm() {
     } else {
       setConvertResult(null)
     }
-  }, [formData.totalPcs, formData.hargaPcs, formData.hargaKarton, selectedProduct])
+  }, [formData.totalPcs, formData.hargaPcs, formData.hargaKarton, selectedProduct, selectedCategory])
 
   const handleProductChange = (produkId: string) => {
-    const product = products.find((p) => p.id === Number(produkId))
+    const product = filteredProducts.find((p) => p.id === Number(produkId))
     setSelectedProduct(product || null)
     setFormData({ ...formData, produkId })
   }
@@ -121,32 +162,61 @@ export default function SalesReportForm() {
       return
     }
 
-    if (!formData.produkId || !formData.totalPcs || !formData.hargaPcs || !formData.hargaKarton || !formData.namaTokoTransaksi) {
-      setError("Semua field wajib diisi")
+    if (!formData.produkId || !formData.namaTokoTransaksi) {
+      setError("Produk dan nama toko wajib diisi")
       return
     }
 
-    if (!convertResult) {
-      setError("Data konversi tidak valid")
-      return
+    // Validasi berdasarkan kategori
+    if (selectedCategory === "Pack/Karton") {
+      if (!formData.totalPcs || !formData.hargaPcs || !formData.stockPack || !formData.stockKarton) {
+        setError("Total pack, harga per pack, dan stok wajib diisi")
+        return
+      }
+      if (!convertResult) {
+        setError("Data konversi tidak valid")
+        return
+      }
+    } else if (selectedCategory === "Curah") {
+      if (!formData.totalGram || !formData.totalHargaCurah) {
+        setError("Total gram dan total harga wajib diisi")
+        return
+      }
+      const totalGram = Number(formData.totalGram)
+      const totalHarga = Number(formData.totalHargaCurah)
+      if (totalGram <= 0 || totalHarga <= 0) {
+        setError("Total gram dan total harga harus lebih dari 0")
+        return
+      }
     }
 
     try {
       setSubmitting(true)
 
+      const requestBody: any = {
+        spgId: user?.id,
+        tanggal: formData.tanggal,
+        produkId: Number(formData.produkId),
+        namaTokoTransaksi: formData.namaTokoTransaksi,
+        notes: formData.notes,
+        category: selectedCategory,
+      }
+
+      if (selectedCategory === "Pack/Karton") {
+        requestBody.totalPcs = Number(formData.totalPcs)
+        requestBody.hargaPcs = Number(formData.hargaPcs)
+        requestBody.hargaKarton = formData.hargaKarton ? Number(formData.hargaKarton) : null
+        requestBody.stockPack = Number(formData.stockPack)
+        requestBody.stockKarton = Number(formData.stockKarton)
+      } else if (selectedCategory === "Curah") {
+        requestBody.totalGram = Number(formData.totalGram)
+        requestBody.totalHargaCurah = Number(formData.totalHargaCurah)
+      }
+
       const response = await fetch("/api/sales/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spgId: user?.id,
-          tanggal: formData.tanggal,
-          produkId: Number(formData.produkId),
-          totalPcs: Number(formData.totalPcs),
-          hargaPcs: Number(formData.hargaPcs),
-          hargaKarton: Number(formData.hargaKarton),
-          namaTokoTransaksi: formData.namaTokoTransaksi,
-          notes: formData.notes,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -154,14 +224,23 @@ export default function SalesReportForm() {
         throw new Error(errorData.error || "Gagal menyimpan laporan")
       }
 
-      setSuccess(`✅ Laporan berhasil disimpan! Total: Rp ${convertResult.total.toLocaleString('id-ID')}`)
+      const totalAmount = selectedCategory === "Pack/Karton" 
+        ? convertResult?.total 
+        : Number(formData.totalHargaCurah)
+
+      setSuccess(`✅ Laporan berhasil disimpan! Total: Rp ${totalAmount?.toLocaleString('id-ID')}`)
       
+      // Reset form
       setFormData({
         tanggal: new Date().toISOString().split("T")[0],
         produkId: "",
         totalPcs: "",
         hargaPcs: "",
         hargaKarton: "",
+        stockPack: "",
+        stockKarton: "",
+        totalGram: "",
+        totalHargaCurah: "",
         namaTokoTransaksi: "",
         notes: "",
       })
@@ -176,6 +255,11 @@ export default function SalesReportForm() {
   }
 
   const maxDate = new Date().toISOString().split("T")[0]
+  const isCurah = selectedCategory === "Curah"
+
+  // Check if curah form is valid (for button enable/disable)
+  const isCurahValid = isCurah && formData.totalGram && formData.totalHargaCurah && 
+    Number(formData.totalGram) > 0 && Number(formData.totalHargaCurah) > 0
 
   return (
     <div className="max-w-4xl mx-auto px-2 sm:px-4">
@@ -219,9 +303,53 @@ export default function SalesReportForm() {
 
       <Card className="border-0 shadow-xl bg-white/80 backdrop-blur">
         <CardContent className="p-4 sm:p-6 space-y-6">
+          {/* Kategori Selection */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-slate-700">Kategori Produk</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("Pack/Karton")}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  selectedCategory === "Pack/Karton"
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Package className={`w-5 h-5 ${
+                    selectedCategory === "Pack/Karton" ? 'text-blue-600' : 'text-slate-400'
+                  }`} />
+                  <div className="text-left">
+                    <div className="font-semibold text-sm">Pack/Karton</div>
+                    <div className="text-xs text-slate-500">Dijual per pack/karton</div>
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("Curah")}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  selectedCategory === "Curah"
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Weight className={`w-5 h-5 ${
+                    selectedCategory === "Curah" ? 'text-green-600' : 'text-slate-400'
+                  }`} />
+                  <div className="text-left">
+                    <div className="font-semibold text-sm">Curah</div>
+                    <div className="text-xs text-slate-500">Dijual per gram</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* Date & Product Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Tanggal */}
             <div className="space-y-2">
               <Label htmlFor="tanggal" className="flex items-center gap-2 text-sm font-medium text-slate-700">
                 <Calendar className="w-4 h-4 text-blue-600" />
@@ -233,211 +361,247 @@ export default function SalesReportForm() {
                 max={maxDate}
                 value={formData.tanggal}
                 onChange={(e) => handleDateChange(e.target.value)}
-                className={`h-11 ${dateError ? "border-red-500 focus:ring-red-500" : "border-slate-300 focus:ring-blue-500"}`}
+                className="bg-white"
               />
-              {dateError && (
-                <div className="flex items-center gap-1.5 text-xs text-red-600 animate-in slide-in-from-left duration-200">
-                  <AlertCircle className="w-3 h-3" />
-                  {dateError}
-                </div>
-              )}
             </div>
 
-            {/* Produk */}
             <div className="space-y-2">
-              <Label htmlFor="produk" className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <Package className="w-4 h-4 text-blue-600" />
-                Pilih Produk <span className="text-red-500">*</span>
+              <Label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                {isCurah ? <Weight className="w-4 h-4 text-green-600" /> : <Package className="w-4 h-4 text-blue-600" />}
+                Pilih Produk {isCurah ? "Curah" : "Pack/Karton"}
               </Label>
-              {loading ? (
-                <div className="h-11 flex items-center px-4 bg-slate-50 border border-slate-300 rounded-md">
-                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
-                  <span className="text-sm text-slate-500">Loading produk...</span>
-                </div>
-              ) : (
-                <Select value={formData.produkId} onValueChange={handleProductChange}>
-                  <SelectTrigger className="h-11 border-slate-300 focus:ring-blue-500">
-                    <SelectValue placeholder="Pilih produk..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map((prod) => (
+              <Select value={formData.produkId} onValueChange={handleProductChange}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="Pilih produk..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredProducts.length === 0 ? (
+                    <div className="p-2 text-sm text-slate-500">Tidak ada produk {selectedCategory}</div>
+                  ) : (
+                    filteredProducts.map((prod) => (
                       <SelectItem key={prod.id} value={String(prod.id)}>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{prod.nama}</span>
-                          <span className="text-xs text-slate-500">• {prod.pcs_per_karton} pcs/karton</span>
-                        </div>
+                        {prod.nama} {!isCurah && `• ${prod.pcs_per_karton} pack/karton`}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {selectedProduct && !isCurah && (
+            <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-blue-600" />
+                <span className="text-sm">1 karton = <b>{selectedProduct.pcs_per_karton} pack</b></span>
+              </div>
+            </div>
+          )}
+
+          {/* Form Pack/Karton */}
+          {!isCurah && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Total Pack Terjual *
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Contoh: 20"
+                    value={formData.totalPcs}
+                    onChange={(e) => setFormData({ ...formData, totalPcs: e.target.value })}
+                    className="bg-white"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Nama Toko *</Label>
+                  <Input
+                    placeholder="Contoh: Toko Sejahtera"
+                    value={formData.namaTokoTransaksi}
+                    onChange={(e) => setFormData({ ...formData, namaTokoTransaksi: e.target.value })}
+                    className="bg-white"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    Harga per Karton (Opsional)
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Kosongkan jika tidak jual karton"
+                    value={formData.hargaKarton}
+                    onChange={(e) => setFormData({ ...formData, hargaKarton: e.target.value })}
+                    className="bg-white"
+                  />
+                  <p className="text-xs text-slate-500">Isi hanya jika ada penjualan per karton</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    Harga per Pack *
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Contoh: 12000"
+                    value={formData.hargaPcs}
+                    onChange={(e) => setFormData({ ...formData, hargaPcs: e.target.value })}
+                    className="bg-white"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Box className="w-4 h-4 text-amber-600" />
+                    Stock Pack *
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Stok pack yang tersisa"
+                    value={formData.stockPack}
+                    onChange={(e) => setFormData({ ...formData, stockPack: e.target.value })}
+                    className="bg-white"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Box className="w-4 h-4 text-amber-600" />
+                    Stock Karton *
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Stok karton yang tersisa"
+                    value={formData.stockKarton}
+                    onChange={(e) => setFormData({ ...formData, stockKarton: e.target.value })}
+                    className="bg-white"
+                  />
+                </div>
+              </div>
+
+              {convertResult && (
+                <div className="p-4 bg-green-50 border-l-4 border-green-500 rounded-lg space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-green-800">
+                    <Calculator className="w-4 h-4" />
+                    <span className="font-semibold">Hasil Konversi:</span>
+                  </div>
+                  {formData.hargaKarton && Number(formData.hargaKarton) > 0 ? (
+                    <>
+                      <p className="text-sm text-green-700">
+                        {convertResult.karton} karton + {convertResult.sisaPcs} pack
+                      </p>
+                      <p className="text-xs text-green-600">
+                        ({convertResult.karton} × Rp {Number(formData.hargaKarton).toLocaleString("id-ID")} + {convertResult.sisaPcs} × Rp {Number(formData.hargaPcs).toLocaleString("id-ID")})
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-green-700">
+                      {convertResult.sisaPcs} pack (semua dihitung per pack)
+                    </p>
+                  )}
+                  <p className="text-lg font-bold text-green-900">
+                    Total: Rp {convertResult.total.toLocaleString("id-ID")}
+                  </p>
+                </div>
               )}
-            </div>
-          </div>
-
-          {/* Info Produk Terpilih */}
-          {selectedProduct && (
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 rounded-lg animate-in slide-in-from-left duration-300">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Package className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="font-semibold text-blue-900">{selectedProduct.nama}</p>
-                  <p className="text-sm text-blue-700 mt-1">
-                    1 karton = <span className="font-bold">{selectedProduct.pcs_per_karton} pcs</span>
-                  </p>
-                </div>
-              </div>
-            </div>
+            </>
           )}
 
-          {/* Quantity & Price Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Total Pcs */}
-            <div className="space-y-2">
-              <Label htmlFor="totalPcs" className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <TrendingUp className="w-4 h-4 text-green-600" />
-                Total Pcs Terjual <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="totalPcs"
-                type="number"
-                min="1"
-                placeholder="Contoh: 20"
-                value={formData.totalPcs}
-                onChange={(e) => setFormData({ ...formData, totalPcs: e.target.value })}
-                disabled={!selectedProduct}
-                className="h-11 border-slate-300 focus:ring-green-500 disabled:bg-slate-100"
-              />
-            </div>
-
-            {/* Nama Toko */}
-            <div className="space-y-2">
-              <Label htmlFor="namaTokoTransaksi" className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <ShoppingBag className="w-4 h-4 text-purple-600" />
-                Nama Toko <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="namaTokoTransaksi"
-                placeholder="Masukkan nama toko"
-                value={formData.namaTokoTransaksi}
-                onChange={(e) => setFormData({ ...formData, namaTokoTransaksi: e.target.value })}
-                className="h-11 border-slate-300 focus:ring-purple-500"
-              />
-            </div>
-
-            {/* Harga Karton */}
-            <div className="space-y-2">
-              <Label htmlFor="hargaKarton" className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <DollarSign className="w-4 h-4 text-emerald-600" />
-                Harga per Karton <span className="text-red-500">*</span>
-              </Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">Rp</span>
-                <Input
-                  id="hargaKarton"
-                  type="number"
-                  min="0"
-                  placeholder="200000"
-                  value={formData.hargaKarton}
-                  onChange={(e) => setFormData({ ...formData, hargaKarton: e.target.value })}
-                  disabled={!selectedProduct}
-                  className="h-11 pl-10 border-slate-300 focus:ring-emerald-500 disabled:bg-slate-100"
-                />
-              </div>
-            </div>
-
-            {/* Harga Pcs */}
-            <div className="space-y-2">
-              <Label htmlFor="hargaPcs" className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <DollarSign className="w-4 h-4 text-amber-600" />
-                Harga per Pcs <span className="text-red-500">*</span>
-              </Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">Rp</span>
-                <Input
-                  id="hargaPcs"
-                  type="number"
-                  min="0"
-                  placeholder="15000"
-                  value={formData.hargaPcs}
-                  onChange={(e) => setFormData({ ...formData, hargaPcs: e.target.value })}
-                  disabled={!selectedProduct}
-                  className="h-11 pl-10 border-slate-300 focus:ring-amber-500 disabled:bg-slate-100"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Preview Konversi */}
-          {convertResult && (
-            <div className="p-5 bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-300 rounded-xl shadow-lg animate-in zoom-in duration-300">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                  <Calculator className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="font-bold text-emerald-900 text-base sm:text-lg">Hasil Konversi Otomatis</h3>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                <div className="bg-white/80 backdrop-blur p-4 rounded-xl shadow-md border border-emerald-200">
-                  <p className="text-xs text-slate-600 mb-2">Karton</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-emerald-700">{convertResult.karton}</p>
-                  <p className="text-xs text-slate-500 mt-2">@ Rp {Number(formData.hargaKarton).toLocaleString('id-ID')}</p>
+          {/* Form Curah - SIMPLIFIED */}
+          {isCurah && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Weight className="w-4 h-4 text-green-600" />
+                    Gram *
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Contoh: 500"
+                    value={formData.totalGram}
+                    onChange={(e) => setFormData({ ...formData, totalGram: e.target.value })}
+                    className="bg-white"
+                  />
+                  <p className="text-xs text-slate-500">Tulis jumlah gram yang terjual</p>
                 </div>
 
-                <div className="bg-white/80 backdrop-blur p-4 rounded-xl shadow-md border border-blue-200">
-                  <p className="text-xs text-slate-600 mb-2">Sisa Pcs</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-blue-700">{convertResult.sisaPcs}</p>
-                  <p className="text-xs text-slate-500 mt-2">@ Rp {Number(formData.hargaPcs).toLocaleString('id-ID')}</p>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-green-600" />
+                    Harga *
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Contoh: 50000"
+                    value={formData.totalHargaCurah}
+                    onChange={(e) => setFormData({ ...formData, totalHargaCurah: e.target.value })}
+                    className="bg-white"
+                  />
+                  <p className="text-xs text-slate-500">Tulis total uang yang diterima</p>
                 </div>
 
-                <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-4 rounded-xl shadow-md sm:col-span-1 col-span-1">
-                  <p className="text-xs text-emerald-100 mb-2">Total Harga</p>
-                  <p className="text-xl sm:text-2xl font-bold text-white break-words">
-                    Rp {convertResult.total.toLocaleString('id-ID')}
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Nama Toko *</Label>
+                  <Input
+                    placeholder="Contoh: Warung Bu Lastri"
+                    value={formData.namaTokoTransaksi}
+                    onChange={(e) => setFormData({ ...formData, namaTokoTransaksi: e.target.value })}
+                    className="bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Display simple summary for Curah */}
+              {formData.totalGram && formData.totalHargaCurah && Number(formData.totalGram) > 0 && Number(formData.totalHargaCurah) > 0 && (
+                <div className="p-4 bg-green-50 border-l-4 border-green-500 rounded-lg space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-green-800">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="font-semibold">Ringkasan Penjualan:</span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    Terjual: <b>{Number(formData.totalGram).toLocaleString("id-ID")} gram</b>
+                  </p>
+                  <p className="text-lg font-bold text-green-900">
+                    Total: Rp {Number(formData.totalHargaCurah).toLocaleString("id-ID")}
                   </p>
                 </div>
-              </div>
-
-              <div className="p-3 bg-white/60 backdrop-blur rounded-lg border border-emerald-200">
-                <p className="text-xs text-slate-700 leading-relaxed">
-                  <span className="font-semibold">Perhitungan:</span> ({convertResult.karton} karton × Rp {Number(formData.hargaKarton).toLocaleString('id-ID')}) + ({convertResult.sisaPcs} pcs × Rp {Number(formData.hargaPcs).toLocaleString('id-ID')}) = <span className="font-bold text-emerald-700">Rp {convertResult.total.toLocaleString('id-ID')}</span>
-                </p>
-              </div>
-            </div>
+              )}
+            </>
           )}
 
-          {/* Catatan */}
+          {/* Notes */}
           <div className="space-y-2">
-            <Label htmlFor="notes" className="text-sm font-medium text-slate-700">
-              Catatan (Opsional)
-            </Label>
+            <Label>Catatan (Opsional)</Label>
             <Input
-              id="notes"
-              placeholder="Tambahkan catatan jika diperlukan..."
+              placeholder="Tambahkan catatan jika perlu..."
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="h-11 border-slate-300 focus:ring-blue-500"
+              className="bg-white"
             />
           </div>
 
           {/* Submit Button */}
           <Button 
-            onClick={handleSubmit}
-            disabled={submitting || !convertResult || !!dateError} 
-            className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleSubmit} 
+            disabled={submitting || (!convertResult && !isCurahValid)}
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-6 text-base"
           >
             {submitting ? (
-              <div className="flex items-center gap-2">
+              <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Menyimpan Laporan...</span>
-              </div>
+                Menyimpan...
+              </span>
             ) : (
-              <div className="flex items-center gap-2">
+              <span className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5" />
-                <span>Simpan Laporan Penjualan</span>
-              </div>
+                Simpan Laporan Penjualan
+              </span>
             )}
           </Button>
         </CardContent>
