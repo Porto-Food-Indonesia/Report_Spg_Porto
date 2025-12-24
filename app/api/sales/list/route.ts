@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server"
 import { getAllSalesReports } from "@/lib/db-utils"
+import { PrismaClient } from "@prisma/client"
+
+const prisma = new PrismaClient()
 
 export async function GET(request: Request) {
   try {
@@ -89,10 +92,47 @@ export async function GET(request: Request) {
       )
     }
 
-    // ✅ TRANSFORM DATA (FULL + FIELD CURAH & PACK/KARTON)
+    // 🔥 AMBIL DATA STOK SPG UNTUK SETIAP PRODUK
+    const stokData: Record<string, any> = {}
+    
+    if (spgId && spgId !== "semua") {
+      try {
+        const stokRecords = await prisma.stok_spg.findMany({
+          where: {
+            spg_id: Number(spgId)
+          },
+          include: {
+            produk: true
+          }
+        })
+        
+        // Map stok by produk_id untuk akses cepat
+        stokRecords.forEach(stok => {
+          stokData[stok.produk_id] = {
+            stokKarton: Number(stok.stok_karton || 0),
+            stokPcs: Number(stok.stok_pcs || 0),
+            stokGram: Number(stok.stok_gram || 0),
+          }
+        })
+        
+        console.log(`📦 Loaded stock data for ${Object.keys(stokData).length} products`)
+      } catch (stokError) {
+        console.error("❌ Error loading stock data:", stokError)
+      }
+    }
+
+    // ✅ TRANSFORM DATA (FULL + FIELD CURAH & PACK/KARTON + STOK)
     const transformed = reports.map((r) => {
       const produkCategory = r.produk?.category || "Pack/Karton"
       const isCurah = produkCategory === "Curah"
+      const produkId = r.produk_id
+      
+      // Ambil stok untuk produk ini
+      const stok = stokData[produkId] || {
+        stokKarton: 0,
+        stokPcs: 0,
+        stokGram: 0
+      }
       
       return {
         id: String(r.id),
@@ -111,6 +151,7 @@ export async function GET(request: Request) {
         spgNama: r.user?.nama || "UNKNOWN",
 
         produk: r.produk?.nama || "UNKNOWN",
+        produkId: String(produkId),
         produkCategory: produkCategory,
         produkPcsPerKarton: r.produk?.pcs_per_karton || 1,
 
@@ -123,10 +164,16 @@ export async function GET(request: Request) {
         // 🟩 DATA CURAH (untuk produk curah, harga tetap di harga_pcs)
         penjualanGram: Number(r.penjualan_gram || 0),
 
+        // 📦 DATA STOK SAAT INI (gunakan nama field yang sama dengan component)
+        stockKarton: stok.stokKarton, // Component pakai 'stockKarton'
+        stockPack: stok.stokPcs,      // Component pakai 'stockPack'
+        stokGram: stok.stokGram,
+
         // 💰 TOTAL (untuk semua jenis produk)
         total: Number(r.total || 0),
         
         toko: r.nama_toko_transaksi || "UNKNOWN",
+        notes: r.notes || "",
       }
     })
 
@@ -154,5 +201,7 @@ export async function GET(request: Request) {
       status: 200,
       headers: { "Content-Type": "application/json" }
     })
+  } finally {
+    await prisma.$disconnect()
   }
 }

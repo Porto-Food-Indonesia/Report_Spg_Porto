@@ -16,10 +16,12 @@ export async function POST(request: Request) {
       namaTokoTransaksi,
       notes,
       category, // "Pack/Karton" atau "Curah"
-      // Pack/Karton fields
-      totalPcs,
-      hargaPcs,
-      hargaKarton,
+      // Pack/Karton fields - UPDATED
+      jumlahKarton,  // FIELD BARU - jumlah karton yang terjual
+      jumlahPack,    // FIELD BARU - jumlah pack yang terjual
+      totalPcs,      // Total pack (sudah dihitung dari frontend)
+      hargaPcs,      // Bisa null jika tidak jual pack
+      hargaKarton,   // Bisa null jika tidak jual karton
       stockPack,
       stockKarton,
       // Curah fields
@@ -59,36 +61,48 @@ export async function POST(request: Request) {
 
     // ✅ PROSES BERDASARKAN KATEGORI
     if (category === "Pack/Karton") {
-      // Validasi Pack/Karton - hargaKarton OPSIONAL
-      if (!totalPcs || !hargaPcs || stockPack === undefined || stockKarton === undefined) {
+      // Validasi Pack/Karton - UPDATED LOGIC
+      const kartonQty = Number(jumlahKarton) || 0
+      const packQty = Number(jumlahPack) || 0
+      
+      // Minimal harus ada penjualan karton atau pack
+      if (kartonQty === 0 && packQty === 0) {
         return NextResponse.json(
-          { error: "Total pack, harga per pack, dan stok wajib diisi" },
+          { error: "Minimal harus ada penjualan karton atau pack" },
           { status: 400 }
         )
       }
 
-      if (totalPcs < 1) {
+      // Validasi harga sesuai dengan yang dijual
+      if (kartonQty > 0 && !hargaKarton) {
         return NextResponse.json(
-          { error: "Total pack minimal 1" },
+          { error: "Harga per karton wajib diisi jika ada penjualan karton" },
           { status: 400 }
         )
       }
 
-      // Auto-convert total pcs ke karton + sisa pcs
-      const penjualanKarton = Math.floor(totalPcs / produk.pcs_per_karton)
-      const penjualanPcs = totalPcs % produk.pcs_per_karton
+      if (packQty > 0 && !hargaPcs) {
+        return NextResponse.json(
+          { error: "Harga per pack wajib diisi jika ada penjualan pack" },
+          { status: 400 }
+        )
+      }
 
-      // Hitung total harga
-      let total = 0
+      // Validasi stok
+      if (stockPack === undefined || stockKarton === undefined) {
+        return NextResponse.json(
+          { error: "Stok pack dan karton wajib diisi" },
+          { status: 400 }
+        )
+      }
+
+      // Hitung total harga - MANUAL CALCULATION
       const hargaKartonValue = hargaKarton ? Number(hargaKarton) : 0
-
-      if (hargaKartonValue > 0) {
-        // Ada harga karton: hitung karton + sisa pack
-        total = penjualanKarton * hargaKartonValue + penjualanPcs * Number(hargaPcs)
-      } else {
-        // Tidak ada harga karton: hitung semua sebagai pack
-        total = totalPcs * Number(hargaPcs)
-      }
+      const hargaPcsValue = hargaPcs ? Number(hargaPcs) : 0
+      
+      const totalKarton = kartonQty * hargaKartonValue
+      const totalPack = packQty * hargaPcsValue
+      const total = totalKarton + totalPack
 
       // Simpan ke database
       penjualan = await prisma.penjualan.create({
@@ -96,10 +110,10 @@ export async function POST(request: Request) {
           spg_id: Number(spgId),
           tanggal: new Date(tanggal),
           produk_id: Number(produkId),
-          penjualan_karton: penjualanKarton,
-          penjualan_pcs: penjualanPcs,
-          harga_karton: hargaKartonValue,
-          harga_pcs: Number(hargaPcs),
+          penjualan_karton: kartonQty,      // Simpan jumlah karton yang dijual
+          penjualan_pcs: packQty,           // Simpan jumlah pack yang dijual
+          harga_karton: hargaKartonValue,   // Bisa 0 jika tidak jual karton
+          harga_pcs: hargaPcsValue,         // Bisa 0 jika tidak jual pack
           nama_toko_transaksi: namaTokoTransaksi,
           total,
           notes: notes || null,
@@ -138,11 +152,13 @@ export async function POST(request: Request) {
       })
 
       console.log("✅ Pack/Karton Sales created:", {
+        jumlahKarton: kartonQty,
+        jumlahPack: packQty,
         totalPcs,
-        penjualanKarton,
-        penjualanPcs,
         hargaKarton: hargaKartonValue,
-        calculationMethod: hargaKartonValue > 0 ? "karton+pack" : "all-pack",
+        hargaPcs: hargaPcsValue,
+        totalKarton,
+        totalPack,
         total,
         stockUpdate: { stockPack, stockKarton },
       })

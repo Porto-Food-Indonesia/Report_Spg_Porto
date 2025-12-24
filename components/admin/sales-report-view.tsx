@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Download, FileSpreadsheet, Weight, CheckCircle2, XCircle } from "lucide-react"
+import { Download, FileSpreadsheet, Weight, CheckCircle2, XCircle, Filter, RotateCcw, ShoppingCart, Package, DollarSign, TrendingUp } from "lucide-react"
 import * as XLSX from 'xlsx'
 
 interface SalesReport {
@@ -38,19 +38,21 @@ interface Toast {
   type: 'success' | 'error'
 }
 
-export default function SalesReportView() {
+interface SalesReportViewProps {
+  theme: "dark" | "light"
+}
+
+export default function SalesReportView({ theme }: SalesReportViewProps) {
   const [salesData, setSalesData] = useState<SalesReport[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [toasts, setToasts] = useState<Toast[]>([])
   
-  // Filter states
   const [selectedSpg, setSelectedSpg] = useState("semua")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
 
-  // Toast function
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     const id = Date.now()
     setToasts(prev => [...prev, { id, message, type }])
@@ -59,13 +61,11 @@ export default function SalesReportView() {
     }, 3000)
   }
 
-  // Fetch data saat komponen dimuat
   useEffect(() => {
     fetchSalesData()
     fetchUsers()
   }, [])
 
-  // Fetch ulang saat filter berubah
   useEffect(() => {
     if (!loading) {
       fetchSalesData()
@@ -76,11 +76,9 @@ export default function SalesReportView() {
     try {
       const response = await fetch("/api/users/list")
       const data = await response.json()
-      
       if (Array.isArray(data)) {
         setUsers(data)
       } else {
-        console.warn("⚠️ Users response bukan array:", data)
         setUsers([])
       }
     } catch (err) {
@@ -94,7 +92,6 @@ export default function SalesReportView() {
       setLoading(true)
       setError("")
 
-      // Build query params
       const params = new URLSearchParams()
       if (selectedSpg && selectedSpg !== "semua") {
         params.append("spgId", selectedSpg)
@@ -118,12 +115,10 @@ export default function SalesReportView() {
       if (Array.isArray(data)) {
         setSalesData(data)
       } else {
-        console.error("⚠️ Response bukan array:", data)
         setSalesData([])
         setError("Format data tidak valid")
       }
     } catch (err) {
-      console.error("❌ Error fetching sales:", err)
       setError(err instanceof Error ? err.message : "Terjadi kesalahan")
       setSalesData([])
     } finally {
@@ -177,22 +172,10 @@ export default function SalesReportView() {
       })
 
       const worksheet = XLSX.utils.json_to_sheet(exportData)
-
       worksheet['!cols'] = [
-        { wch: 5 },   // NO
-        { wch: 20 },  // TANGGAL INPUT
-        { wch: 18 },  // TANGGAL TRANSAKSI
-        { wch: 20 },  // NAMA
-        { wch: 25 },  // PRODUK
-        { wch: 10 },  // PACK
-        { wch: 10 },  // KARTON
-        { wch: 15 },  // HARGA_PACK
-        { wch: 15 },  // HARGA_KARTON
-        { wch: 15 },  // STOCK_PACK
-        { wch: 15 },  // STOCK_KARTON
-        { wch: 18 },  // TOTAL_SELLOUT
-        { wch: 30 },  // TOKO
-        { wch: 12 },  // GRAM
+        { wch: 5 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 25 },
+        { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 18 }, { wch: 30 }, { wch: 12 }
       ]
 
       const workbook = XLSX.utils.book_new()
@@ -205,10 +188,8 @@ export default function SalesReportView() {
       const filename = `LAPORAN_PENJUALAN_${spgName}_${dateRange}.xlsx`
 
       XLSX.writeFile(workbook, filename)
-      
       showToast("Data berhasil diekspor ke Excel!", "success")
     } catch (err) {
-      console.error('Export error:', err)
       showToast('Gagal mengekspor data', 'error')
     }
   }
@@ -283,7 +264,6 @@ export default function SalesReportView() {
 
       showToast("Data berhasil diekspor ke CSV!", "success")
     } catch (err) {
-      console.error('Export CSV error:', err)
       showToast('Gagal mengekspor data', 'error')
     }
   }
@@ -315,277 +295,359 @@ export default function SalesReportView() {
       }, 0)
     : 0
 
+  // Theme classes
+  const bgClass = theme === "dark" 
+    ? "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+    : "bg-gradient-to-br from-slate-50 via-white to-slate-100"
+  const cardBg = theme === "dark" ? "bg-slate-800/50" : "bg-white/80"
+  const cardBorder = theme === "dark" ? "border-slate-700/50" : "border-slate-200"
+  const textPrimary = theme === "dark" ? "text-white" : "text-slate-900"
+  const textSecondary = theme === "dark" ? "text-slate-300" : "text-slate-600"
+  const textMuted = theme === "dark" ? "text-slate-400" : "text-slate-500"
+  const inputBg = theme === "dark" ? "bg-slate-700/50 border-slate-600" : "bg-white border-slate-300"
+  const inputText = theme === "dark" ? "text-white" : "text-slate-900"
+  const tableBg = theme === "dark" ? "bg-slate-800/30" : "bg-slate-50/50"
+  const tableHoverBg = theme === "dark" ? "hover:bg-slate-700/30" : "hover:bg-slate-100/70"
+  const tableBorder = theme === "dark" ? "border-slate-700/50" : "border-slate-200/70"
+  const tableHeaderBg = theme === "dark" ? "bg-slate-700/50" : "bg-slate-100/80"
+
   return (
-    <div className="space-y-6">
-      {/* Toast Container */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg animate-in slide-in-from-top-5 duration-300 ${
-              toast.type === 'success' 
-                ? 'bg-green-500 text-white' 
-                : 'bg-red-500 text-white'
-            }`}
-          >
-            {toast.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            ) : (
-              <XCircle className="w-5 h-5 flex-shrink-0" />
-            )}
-            <p className="text-sm font-medium">{toast.message}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Filter Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filter Laporan</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="spg-select">SPG</Label>
-              <select
-                id="spg-select"
-                value={selectedSpg}
-                onChange={(e) => setSelectedSpg(e.target.value)}
-                className="w-full h-10 px-3 py-2 text-sm border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                <option value="semua">Semua SPG</option>
-                {Array.isArray(users) && users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.nama}
-                  </option>
-                ))}
-              </select>
+    <div className={`min-h-screen ${bgClass} p-6 transition-colors duration-300`}>
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Toast Container */}
+        <div className="fixed top-20 right-6 z-50 space-y-2">
+          {toasts.map(toast => (
+            <div
+              key={toast.id}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl animate-in slide-in-from-top-5 duration-300 backdrop-blur-sm ${
+                toast.type === 'success' 
+                  ? 'bg-emerald-500/90 text-white border border-emerald-400/50' 
+                  : 'bg-red-500/90 text-white border border-red-400/50'
+              }`}
+            >
+              {toast.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+              ) : (
+                <XCircle className="w-5 h-5 flex-shrink-0" />
+              )}
+              <p className="text-sm font-medium">{toast.message}</p>
             </div>
+          ))}
+        </div>
 
-            <div className="space-y-2">
-              <Label>Tanggal Mulai</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Tanggal Akhir</Label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2 flex items-end">
-              <Button onClick={handleResetFilter} variant="outline" className="w-full">
-                Reset Filter
-              </Button>
-            </div>
-
-            <div className="space-y-2 flex items-end gap-2">
-              <Button 
-                onClick={handleExportToExcel} 
-                className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
-                disabled={salesData.length === 0 || loading}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                Excel
-              </Button>
-              <Button 
-                onClick={handleExportToCSV} 
-                variant="outline"
-                className="flex-1 gap-2"
-                disabled={salesData.length === 0 || loading}
-              >
-                <Download className="w-4 h-4" />
-                CSV
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card>
+        {/* Filter Section */}
+        <Card className={`${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl relative overflow-hidden`}>
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
           <CardHeader>
-            <CardTitle className="text-sm">Total Transaksi</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {Array.isArray(salesData) ? salesData.length : 0}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Total Karton Terjual</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{totalKarton.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Total Pack Terjual</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{totalPcs.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Weight className="w-4 h-4" />
-              Total Gram (Curah)
+            <CardTitle className={`${textPrimary} flex items-center gap-2`}>
+              <Filter className="w-5 h-5 text-blue-400" />
+              Filter Laporan Penjualan
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{totalGram.toLocaleString()}</p>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="space-y-2">
+                <Label className={textSecondary}>SPG</Label>
+                <select
+                  value={selectedSpg}
+                  onChange={(e) => setSelectedSpg(e.target.value)}
+                  className={`w-full h-10 px-3 py-2 text-sm ${inputBg} ${inputText} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
+                >
+                  <option value="semua">Semua SPG</option>
+                  {Array.isArray(users) && users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.nama}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className={textSecondary}>Tanggal Mulai</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className={`${inputBg} ${inputText} focus:ring-blue-500`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className={textSecondary}>Tanggal Akhir</Label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className={`${inputBg} ${inputText} focus:ring-blue-500`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className={`${textSecondary} opacity-0`}>Reset</Label>
+                <Button 
+                  onClick={handleResetFilter} 
+                  variant="outline" 
+                  className={`w-full ${theme === "dark" ? "bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600 hover:text-white" : "bg-white border-slate-300 text-slate-900 hover:bg-slate-100"}`}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label className={`${textSecondary} opacity-0`}>Export</Label>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleExportToExcel} 
+                    className="flex-1 gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg text-white"
+                    disabled={salesData.length === 0 || loading}
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Excel
+                  </Button>
+                  <Button 
+                    onClick={handleExportToCSV} 
+                    className={`flex-1 gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 border-slate-600 text-white" : "bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-900"} border`}
+                    disabled={salesData.length === 0 || loading}
+                  >
+                    <Download className="w-4 h-4" />
+                    CSV
+                  </Button>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <Card className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}>
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
+            <CardContent className="relative p-5">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Transaksi</p>
+                  <h3 className={`text-2xl font-bold ${textPrimary}`}>{Array.isArray(salesData) ? salesData.length : 0}</h3>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                  <ShoppingCart className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}>
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
+            <CardContent className="relative p-5">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Karton</p>
+                  <h3 className={`text-2xl font-bold ${textPrimary}`}>{totalKarton.toLocaleString()}</h3>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                  <Package className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}>
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-orange-500 to-red-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
+            <CardContent className="relative p-5">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Pack</p>
+                  <h3 className={`text-2xl font-bold ${textPrimary}`}>{totalPcs.toLocaleString()}</h3>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg">
+                  <TrendingUp className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}>
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
+            <CardContent className="relative p-5">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Gram</p>
+                  <h3 className={`text-2xl font-bold ${textPrimary}`}>{totalGram.toLocaleString()}</h3>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
+                  <Weight className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}>
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
+            <CardContent className="relative p-5">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Revenue</p>
+                  <h3 className={`text-xl font-bold ${textPrimary}`}>Rp {totalRevenue.toLocaleString("id-ID")}</h3>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
+                  <DollarSign className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Data Table */}
+        <Card className={`${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl relative overflow-hidden`}>
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
           <CardHeader>
-            <CardTitle className="text-sm">Total Revenue</CardTitle>
+            <CardTitle className={textPrimary}>Data Penjualan</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
-              Rp {totalRevenue.toLocaleString("id-ID")}
-            </p>
+            {error && (
+              <div className="p-4 mb-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
+                {error}
+              </div>
+            )}
+
+            {loading ? (
+              <div className="text-center py-16">
+                <div className="relative w-32 h-32 mx-auto mb-6">
+                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 border-r-purple-500 animate-spin" />
+                  <div className="absolute inset-2 rounded-full border-4 border-transparent border-b-pink-500 border-l-cyan-500 animate-spin-slow" style={{ animationDirection: 'reverse' }} />
+                  <div className="absolute inset-4 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 animate-pulse" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <ShoppingCart className="w-12 h-12 text-white animate-bounce" />
+                  </div>
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 blur-2xl opacity-50 animate-pulse" />
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                    Memuat Data Penjualan
+                  </h3>
+                  <div className="flex items-center justify-center gap-1">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+                <style jsx>{`
+                  @keyframes spin-slow {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                  }
+                  .animate-spin-slow {
+                    animation: spin-slow 3s linear infinite;
+                  }
+                `}</style>
+              </div>
+            ) : !Array.isArray(salesData) || salesData.length === 0 ? (
+              <div className="text-center py-12">
+                <ShoppingCart className={`w-16 h-16 ${textMuted} mx-auto mb-4`} />
+                <p className={textMuted}>Tidak ada data penjualan</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg">
+                <table className="w-full">
+                  <thead>
+                    <tr className={`border-b ${tableBorder} ${tableHeaderBg}`}>
+                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Tanggal Input</th>
+                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Tanggal Transaksi</th>
+                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>SPG</th>
+                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Produk</th>
+                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Kategori</th>
+                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Toko</th>
+                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Pack</th>
+                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Karton</th>
+                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Harga Pack</th>
+                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Harga Karton</th>
+                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Stock Pack</th>
+                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Stock Karton</th>
+                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Total</th>
+                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Gram</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesData.map((item, index) => {
+                      const isCurah = item.produkCategory === "Curah"
+                      const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
+                      return (
+                        <tr key={item.id} className={`border-b ${tableBorder} ${tableHoverBg} transition-colors ${index % 2 === 0 ? tableBg : ''}`}>
+                          <td className={`px-4 py-3 text-sm ${textSecondary}`}>
+                            {item.created_at 
+                              ? new Date(item.created_at).toLocaleString("id-ID", {
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: false
+                                })
+                              : "-"
+                            }
+                          </td>
+                          <td className={`px-4 py-3 text-sm ${textSecondary}`}>
+                            {new Date(item.tanggal).toLocaleDateString("id-ID")}
+                          </td>
+                          <td className={`px-4 py-3 text-sm ${textPrimary} font-medium`}>{item.spgNama}</td>
+                          <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.produk}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                              isCurah 
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            }`}>
+                              {isCurah && <Weight className="w-3 h-3" />}
+                              {item.produkCategory || "Pack/Karton"}
+                            </span>
+                          </td>
+                          <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.toko}</td>
+                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+                            {isCurah ? "-" : (item.penjualanPcs || 0)}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+                            {isCurah ? "-" : (item.penjualanKarton || 0)}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textSecondary}`}>
+                            {isCurah ? (
+                              <span className="font-semibold text-emerald-400">
+                                Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}
+                              </span>
+                            ) : (
+                              <span>Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}</span>
+                            )}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textSecondary}`}>
+                            {isCurah ? "-" : (
+                              <span>Rp {(item.hargaKarton || 0).toLocaleString("id-ID")}</span>
+                            )}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+                            {isCurah ? "-" : stockPack}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+                            {isCurah ? "-" : (item.penjualanKarton || 0)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold text-blue-400">
+                            Rp {(item.total || 0).toLocaleString("id-ID")}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right">
+                            {isCurah ? (
+                              <span className="font-semibold text-emerald-400">
+                                {(item.penjualanGram || 0).toLocaleString()} gr
+                              </span>
+                            ) : "-"}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      {/* Data Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Data Penjualan</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <div className="p-4 mb-4 bg-red-100 border border-red-300 rounded text-red-700">
-              {error}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="text-center py-8 text-slate-500">
-              Loading data...
-            </div>
-          ) : !Array.isArray(salesData) || salesData.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">
-              Tidak ada data penjualan
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="px-4 py-3 text-left text-sm font-medium">Tanggal Input</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Tanggal Transaksi</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">SPG</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Produk</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Kategori</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Toko</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Pack</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Karton</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Harga Pack</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Harga Karton</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Stock Pack</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Stock Karton</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Total</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium">Gram</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {salesData.map((item) => {
-                    const isCurah = item.produkCategory === "Curah"
-                    const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
-                    return (
-                      <tr key={item.id} className="border-b hover:bg-slate-50">
-                        <td className="px-4 py-3 text-sm">
-                          {item.created_at 
-                            ? new Date(item.created_at).toLocaleString("id-ID", {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: false
-                              })
-                            : "-"
-                          }
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {new Date(item.tanggal).toLocaleDateString("id-ID")}
-                        </td>
-                        <td className="px-4 py-3 text-sm">{item.spgNama}</td>
-                        <td className="px-4 py-3 text-sm">{item.produk}</td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-                            isCurah 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {isCurah && <Weight className="w-3 h-3" />}
-                            {item.produkCategory || "Pack/Karton"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm">{item.toko}</td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          {isCurah ? "-" : (item.penjualanPcs || 0)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          {isCurah ? "-" : (item.penjualanKarton || 0)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          {isCurah ? (
-                            <span className="font-semibold text-green-700">
-                              Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}
-                              <div className="text-xs text-slate-500">(Total Curah)</div>
-                            </span>
-                          ) : (
-                            <span>Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          {isCurah ? "-" : (
-                            <span>Rp {(item.hargaKarton || 0).toLocaleString("id-ID")}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          {isCurah ? "-" : stockPack}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          {isCurah ? "-" : (item.penjualanKarton || 0)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right font-medium text-blue-600">
-                          Rp {(item.total || 0).toLocaleString("id-ID")}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          {isCurah ? (
-                            <span className="font-semibold text-green-700">
-                              {(item.penjualanGram || 0).toLocaleString()} gr
-                            </span>
-                          ) : "-"}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }
