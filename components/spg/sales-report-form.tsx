@@ -1,14 +1,13 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect, useRef } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
-import { Package, Calculator, AlertCircle, CheckCircle2, TrendingUp, ShoppingBag, DollarSign, Calendar, Weight, Box, Search, AlertTriangle, X } from "lucide-react"
+import { Package, Calculator, AlertCircle, CheckCircle2, ShoppingBag, DollarSign, Calendar, Weight, Box, Search, AlertTriangle, X } from "lucide-react"
 
 interface Product {
   id: number
@@ -32,38 +31,32 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
   
-  // Modal states
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   
-  // Kategori produk
   const [selectedCategory, setSelectedCategory] = useState("Pack/Karton")
   
-  // Search state
+  const [showSearchModal, setShowSearchModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const searchInputRef = useRef<HTMLInputElement>(null)
   
   const [formData, setFormData] = useState({
     tanggal: new Date().toISOString().split("T")[0],
     produkId: "",
-    // Pack/Karton - Manual input
     jumlahKarton: "",
     jumlahPack: "",
     hargaPcs: "",
     hargaKarton: "",
     stockPack: "",
     stockKarton: "",
-    // Curah (Simplified - no per gram calculation)
     totalGram: "",
     totalHargaCurah: "",
-    // Common
     namaTokoTransaksi: "",
     notes: "",
   })
 
   const [totalHarga, setTotalHarga] = useState(0)
-
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [dateError, setDateError] = useState("")
 
@@ -71,11 +64,9 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     fetchProducts()
   }, [])
 
-  // Filter produk berdasarkan kategori dan search query
   useEffect(() => {
     let filtered = products.filter(p => p.category === selectedCategory)
     
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(p => 
@@ -87,7 +78,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     setFilteredProducts(filtered)
   }, [selectedCategory, products, searchQuery])
 
-  // Reset form ketika ganti kategori
   useEffect(() => {
     setFormData({
       tanggal: formData.tanggal,
@@ -107,6 +97,14 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     setTotalHarga(0)
     setSearchQuery("")
   }, [selectedCategory])
+
+  useEffect(() => {
+    if (showSearchModal && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus()
+      }, 100)
+    }
+  }, [showSearchModal])
 
   const fetchProducts = async () => {
     try {
@@ -128,7 +126,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     }
   }
 
-  // Hitung total harga otomatis untuk Pack/Karton
   useEffect(() => {
     if (selectedCategory === "Pack/Karton") {
       const jumlahKarton = Number(formData.jumlahKarton) || 0
@@ -144,10 +141,12 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     }
   }, [formData.jumlahKarton, formData.jumlahPack, formData.hargaKarton, formData.hargaPcs, selectedCategory])
 
-  const handleProductChange = (produkId: string) => {
+  const handleProductSelect = (produkId: string) => {
     const product = filteredProducts.find((p) => p.id === Number(produkId))
     setSelectedProduct(product || null)
     setFormData({ ...formData, produkId })
+    setShowSearchModal(false)
+    setSearchQuery("")
   }
 
   const handleDateChange = (newDate: string) => {
@@ -166,7 +165,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
   const handleSubmitClick = () => {
     setError("")
-    setSuccess("")
 
     if (dateError) {
       setError("Tanggal tidak valid")
@@ -178,7 +176,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       return
     }
 
-    // Validasi berdasarkan kategori
     if (selectedCategory === "Pack/Karton") {
       const jumlahKarton = Number(formData.jumlahKarton) || 0
       const jumlahPack = Number(formData.jumlahPack) || 0
@@ -215,42 +212,63 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       }
     }
 
-    // Show confirmation modal
     setShowConfirmModal(true)
   }
 
   const handleConfirmSubmit = async () => {
     setShowConfirmModal(false)
+    setShowSuccessModal(true)
+    
+    const oldFormData = { ...formData }
+    const oldProduct = selectedProduct
+    const oldTotalHarga = totalHarga
+    
+    setFormData({
+      tanggal: new Date().toISOString().split("T")[0],
+      produkId: "",
+      jumlahKarton: "",
+      jumlahPack: "",
+      hargaPcs: "",
+      hargaKarton: "",
+      stockPack: "",
+      stockKarton: "",
+      totalGram: "",
+      totalHargaCurah: "",
+      namaTokoTransaksi: "",
+      notes: "",
+    })
+    setSelectedProduct(null)
+    setTotalHarga(0)
+    setSearchQuery("")
     
     try {
       setSubmitting(true)
 
       const requestBody: any = {
         spgId: user?.id,
-        tanggal: formData.tanggal,
-        produkId: Number(formData.produkId),
-        namaTokoTransaksi: formData.namaTokoTransaksi,
-        notes: formData.notes,
+        tanggal: oldFormData.tanggal,
+        produkId: Number(oldFormData.produkId),
+        namaTokoTransaksi: oldFormData.namaTokoTransaksi,
+        notes: oldFormData.notes,
         category: selectedCategory,
       }
 
       if (selectedCategory === "Pack/Karton") {
-        // Hitung total pack dari karton + pack
-        const jumlahKarton = Number(formData.jumlahKarton) || 0
-        const jumlahPack = Number(formData.jumlahPack) || 0
-        const pcsPerKarton = selectedProduct?.pcs_per_karton || 0
+        const jumlahKarton = Number(oldFormData.jumlahKarton) || 0
+        const jumlahPack = Number(oldFormData.jumlahPack) || 0
+        const pcsPerKarton = oldProduct?.pcs_per_karton || 0
         const totalPcs = (jumlahKarton * pcsPerKarton) + jumlahPack
         
         requestBody.totalPcs = totalPcs
         requestBody.jumlahKarton = jumlahKarton
         requestBody.jumlahPack = jumlahPack
-        requestBody.hargaPcs = formData.hargaPcs ? Number(formData.hargaPcs) : null
-        requestBody.hargaKarton = formData.hargaKarton ? Number(formData.hargaKarton) : null
-        requestBody.stockPack = Number(formData.stockPack)
-        requestBody.stockKarton = Number(formData.stockKarton)
+        requestBody.hargaPcs = oldFormData.hargaPcs ? Number(oldFormData.hargaPcs) : null
+        requestBody.hargaKarton = oldFormData.hargaKarton ? Number(oldFormData.hargaKarton) : null
+        requestBody.stockPack = Number(oldFormData.stockPack)
+        requestBody.stockKarton = Number(oldFormData.stockKarton)
       } else if (selectedCategory === "Curah") {
-        requestBody.totalGram = Number(formData.totalGram)
-        requestBody.totalHargaCurah = Number(formData.totalHargaCurah)
+        requestBody.totalGram = Number(oldFormData.totalGram)
+        requestBody.totalHargaCurah = Number(oldFormData.totalHargaCurah)
       }
 
       const response = await fetch("/api/sales/create", {
@@ -264,39 +282,16 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         throw new Error(errorData.error || "Gagal menyimpan laporan")
       }
 
-      const totalAmount = selectedCategory === "Pack/Karton" 
-        ? totalHarga
-        : Number(formData.totalHargaCurah)
-
-      // Show success modal
-      setShowSuccessModal(true)
-      
-      // Reset form
-      setFormData({
-        tanggal: new Date().toISOString().split("T")[0],
-        produkId: "",
-        jumlahKarton: "",
-        jumlahPack: "",
-        hargaPcs: "",
-        hargaKarton: "",
-        stockPack: "",
-        stockKarton: "",
-        totalGram: "",
-        totalHargaCurah: "",
-        namaTokoTransaksi: "",
-        notes: "",
-      })
-      setSelectedProduct(null)
-      setTotalHarga(0)
-      setSearchQuery("")
-      
-      // Auto close success modal after 3 seconds
       setTimeout(() => {
         setShowSuccessModal(false)
-      }, 3000)
+      }, 2500)
     } catch (err) {
       console.error("❌ Gagal submit:", err)
       setError(err instanceof Error ? err.message : "Terjadi kesalahan")
+      setShowSuccessModal(false)
+      setFormData(oldFormData)
+      setSelectedProduct(oldProduct)
+      setTotalHarga(oldTotalHarga)
     } finally {
       setSubmitting(false)
     }
@@ -305,19 +300,15 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const maxDate = new Date().toISOString().split("T")[0]
   const isCurah = selectedCategory === "Curah"
 
-  // Check if curah form is valid (for button enable/disable)
   const isCurahValid = isCurah && formData.totalGram && formData.totalHargaCurah && 
     Number(formData.totalGram) > 0 && Number(formData.totalHargaCurah) > 0
 
-  // Check if pack/karton form is valid
   const isPackKartonValid = !isCurah && selectedProduct && 
     (Number(formData.jumlahKarton) > 0 || Number(formData.jumlahPack) > 0) &&
     formData.stockPack && formData.stockKarton &&
     ((Number(formData.jumlahKarton) > 0 && formData.hargaKarton) || 
      (Number(formData.jumlahPack) > 0 && formData.hargaPcs))
 
-  // Theme classes
-  const bgClass = isDark ? "bg-slate-900" : "bg-slate-50"
   const cardBg = isDark ? "bg-slate-800/50 backdrop-blur border-slate-700" : "bg-white/80 backdrop-blur border-slate-200"
   const textClass = isDark ? "text-slate-100" : "text-slate-900"
   const textSecondary = isDark ? "text-slate-400" : "text-slate-600"
@@ -326,11 +317,90 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const overlayBg = isDark ? "bg-black/70" : "bg-black/50"
 
   return (
-    <div className="max-w-4xl mx-auto px-2 sm:px-4">
-      {/* Confirmation Modal */}
+    <div className="max-w-4xl mx-auto px-2 sm:px-4 pb-6">
+      {showSearchModal && (
+        <div 
+          className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}
+          onClick={() => setShowSearchModal(false)}
+        >
+          <div 
+            className={`${modalBg} rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mx-0 sm:mx-4 border-2 animate-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] sm:max-h-[80vh] flex flex-col`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`p-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} flex items-center justify-between`}>
+              <h3 className={`text-lg font-bold ${textClass}`}>Pilih Produk</h3>
+              <button
+                onClick={() => setShowSearchModal(false)}
+                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Cari nama atau SKU produk..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`w-full pl-10 h-11 px-3 py-2 text-sm border ${inputBg} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {filteredProducts.length === 0 ? (
+                <div className={`p-8 text-center ${textSecondary}`}>
+                  <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">
+                    {searchQuery ? "Produk tidak ditemukan" : `Tidak ada produk ${selectedCategory}`}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredProducts.map((prod) => (
+                    <button
+                      key={prod.id}
+                      onClick={() => handleProductSelect(String(prod.id))}
+                      className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                        formData.produkId === String(prod.id)
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-lg ${isCurah ? 'bg-green-100 dark:bg-green-900/30' : 'bg-blue-100 dark:bg-blue-900/30'} flex items-center justify-center flex-shrink-0`}>
+                          {isCurah ? (
+                            <Weight className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <Package className="w-5 h-5 text-blue-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold ${textClass} truncate`}>{prod.nama}</p>
+                          <p className={`text-xs ${textSecondary}`}>SKU: {prod.sku}</p>
+                          {!isCurah && (
+                            <p className={`text-xs ${textSecondary} mt-1`}>
+                              {prod.pcs_per_karton} pack/karton
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showConfirmModal && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}>
-          <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full mx-4 border-2 animate-in zoom-in duration-300`}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200 p-4`}>
+          <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full border-2 animate-in zoom-in duration-300`}>
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-center">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg">
@@ -339,25 +409,21 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
               </div>
               
               <div className="text-center space-y-2">
-                <h3 className={`text-xl font-bold ${textClass}`}>
-                  Konfirmasi Laporan Penjualan
-                </h3>
-                <p className={`text-sm ${textSecondary}`}>
-                  Apakah Anda yakin data yang diinput sudah benar dan ingin menyimpan laporan penjualan ini?
-                </p>
+                <h3 className={`text-xl font-bold ${textClass}`}>Konfirmasi Laporan</h3>
+                <p className={`text-sm ${textSecondary}`}>Pastikan data sudah benar sebelum menyimpan</p>
               </div>
 
               <div className={`p-4 rounded-xl ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-2">
                     <span className={textSecondary}>Produk:</span>
-                    <span className={`font-semibold ${textClass}`}>{selectedProduct?.nama}</span>
+                    <span className={`font-semibold ${textClass} text-right`}>{selectedProduct?.nama}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-2">
                     <span className={textSecondary}>Toko:</span>
-                    <span className={`font-semibold ${textClass}`}>{formData.namaTokoTransaksi}</span>
+                    <span className={`font-semibold ${textClass} text-right truncate`}>{formData.namaTokoTransaksi}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-2">
                     <span className={textSecondary}>Total:</span>
                     <span className="font-bold text-green-500">
                       Rp {(isCurah ? Number(formData.totalHargaCurah) : totalHarga).toLocaleString('id-ID')}
@@ -379,14 +445,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                   disabled={submitting}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
                 >
-                  {submitting ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Menyimpan...
-                    </span>
-                  ) : (
-                    "Ya, Simpan"
-                  )}
+                  Ya, Simpan
                 </Button>
               </div>
             </div>
@@ -394,10 +453,9 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         </div>
       )}
 
-      {/* Success Modal */}
       {showSuccessModal && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}>
-          <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full mx-4 border-2 animate-in zoom-in duration-300`}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200 p-4`}>
+          <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full border-2 animate-in zoom-in duration-300`}>
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-center">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg animate-bounce">
@@ -406,18 +464,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
               </div>
               
               <div className="text-center space-y-2">
-                <h3 className={`text-xl font-bold ${textClass}`}>
-                  Berhasil Disimpan! 🎉
-                </h3>
-                <p className={`text-sm ${textSecondary}`}>
-                  Laporan penjualan Anda telah berhasil tersimpan ke sistem
-                </p>
-              </div>
-
-              <div className={`p-4 rounded-xl bg-gradient-to-r ${isDark ? 'from-green-900/30 to-emerald-900/30' : 'from-green-50 to-emerald-50'}`}>
-                <p className="text-center text-lg font-bold text-green-600">
-                  Rp {(isCurah ? Number(formData.totalHargaCurah) : totalHarga).toLocaleString('id-ID')}
-                </p>
+                <h3 className={`text-xl font-bold ${textClass}`}>Berhasil Disimpan! 🎉</h3>
+                <p className={`text-sm ${textSecondary}`}>Laporan penjualan tersimpan ke sistem</p>
               </div>
 
               <Button
@@ -431,7 +479,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         </div>
       )}
 
-      {/* Hero Section */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -439,19 +486,18 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
           </div>
           <div>
             <h1 className={`text-xl sm:text-2xl font-bold ${textClass}`}>Input Laporan Penjualan</h1>
-            <p className={`text-xs sm:text-sm ${textSecondary}`}>Catat penjualan harian Anda dengan mudah</p>
+            <p className={`text-xs sm:text-sm ${textSecondary}`}>Catat penjualan harian Anda</p>
           </div>
         </div>
       </div>
 
-      {/* Alert Messages */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg shadow-sm animate-in slide-in-from-top duration-300">
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-lg shadow-sm animate-in slide-in-from-top duration-300">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-900">Oops! Ada kesalahan</p>
-              <p className="text-sm text-red-700 mt-1">{error}</p>
+              <p className="text-sm font-semibold text-red-900 dark:text-red-400">Ada kesalahan</p>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
             </div>
           </div>
         </div>
@@ -459,7 +505,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
       <Card className={`border-0 shadow-xl ${cardBg}`}>
         <CardContent className="p-4 sm:p-6 space-y-6">
-          {/* Kategori Selection */}
           <div className="space-y-2">
             <Label className={`text-sm font-medium ${textClass}`}>Kategori Produk</Label>
             <div className="grid grid-cols-2 gap-3">
@@ -469,16 +514,14 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 className={`p-4 rounded-lg border-2 transition-all ${
                   selectedCategory === "Pack/Karton"
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
+                    : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Package className={`w-5 h-5 ${
-                    selectedCategory === "Pack/Karton" ? 'text-blue-600' : isDark ? 'text-slate-400' : 'text-slate-400'
-                  }`} />
+                  <Package className={`w-5 h-5 ${selectedCategory === "Pack/Karton" ? 'text-blue-600' : 'text-slate-400'}`} />
                   <div className="text-left">
                     <div className={`font-semibold text-sm ${selectedCategory === "Pack/Karton" ? 'text-blue-600' : textClass}`}>Pack/Karton</div>
-                    <div className={`text-xs ${textSecondary}`}>Dijual per pack/karton</div>
+                    <div className={`text-xs ${textSecondary}`}>Per pack/karton</div>
                   </div>
                 </div>
               </button>
@@ -488,23 +531,20 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 className={`p-4 rounded-lg border-2 transition-all ${
                   selectedCategory === "Curah"
                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                    : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
+                    : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Weight className={`w-5 h-5 ${
-                    selectedCategory === "Curah" ? 'text-green-600' : isDark ? 'text-slate-400' : 'text-slate-400'
-                  }`} />
+                  <Weight className={`w-5 h-5 ${selectedCategory === "Curah" ? 'text-green-600' : 'text-slate-400'}`} />
                   <div className="text-left">
                     <div className={`font-semibold text-sm ${selectedCategory === "Curah" ? 'text-green-600' : textClass}`}>Curah</div>
-                    <div className={`text-xs ${textSecondary}`}>Dijual per gram</div>
+                    <div className={`text-xs ${textSecondary}`}>Per gram</div>
                   </div>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* Date & Product Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="tanggal" className={`flex items-center gap-2 text-sm font-medium ${textClass}`}>
@@ -527,44 +567,16 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 Pilih Produk {isCurah ? "Curah" : "Pack/Karton"}
               </Label>
               
-              <Select value={formData.produkId} onValueChange={handleProductChange}>
-                <SelectTrigger className={inputBg}>
-                  <SelectValue placeholder="Pilih produk..." />
-                </SelectTrigger>
-                <SelectContent className={isDark ? 'bg-slate-800 border-slate-700' : ''}>
-                  {/* Search Input Inside Dropdown */}
-                  <div className={`sticky top-0 ${isDark ? 'bg-slate-800' : 'bg-white'} p-2 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} z-10`}>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Cari nama atau SKU..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className={`w-full pl-10 h-9 px-3 py-2 text-sm border ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'border-slate-200'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                        onKeyDown={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="max-h-[300px] overflow-y-auto">
-                    {filteredProducts.length === 0 ? (
-                      <div className={`p-2 text-sm ${textSecondary} text-center`}>
-                        {searchQuery ? "Produk tidak ditemukan" : `Tidak ada produk ${selectedCategory}`}
-                      </div>
-                    ) : (
-                      filteredProducts.map((prod) => (
-                        <SelectItem key={prod.id} value={String(prod.id)} className={isDark ? 'text-slate-100' : ''}>
-                          {prod.nama} {!isCurah && `• ${prod.pcs_per_karton} pack/karton`}
-                        </SelectItem>
-                      ))
-                    )}
-                  </div>
-                </SelectContent>
-              </Select>
+              <button
+                type="button"
+                onClick={() => setShowSearchModal(true)}
+                className={`w-full h-10 px-3 rounded-md border ${inputBg} text-left flex items-center justify-between hover:border-blue-400 transition-colors`}
+              >
+                <span className={selectedProduct ? textClass : textSecondary}>
+                  {selectedProduct ? selectedProduct.nama : "Pilih produk..."}
+                </span>
+                <Search className="w-4 h-4 text-slate-400" />
+              </button>
             </div>
           </div>
 
@@ -577,14 +589,13 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             </div>
           )}
 
-          {/* Form Pack/Karton - Manual Input */}
           {!isCurah && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className={`flex items-center gap-2 ${textClass}`}>
                     <Box className="w-4 h-4 text-blue-600" />
-                    Jumlah Karton Terjual
+                    Jumlah Karton
                   </Label>
                   <Input
                     type="number"
@@ -598,7 +609,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 <div className="space-y-2">
                   <Label className={`flex items-center gap-2 ${textClass}`}>
                     <Package className="w-4 h-4 text-blue-600" />
-                    Jumlah Pack Terjual
+                    Jumlah Pack
                   </Label>
                   <Input
                     type="number"
@@ -650,7 +661,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="h-6"></div> {/* Spacer for alignment */}
+                  <div className="h-6"></div>
                 </div>
 
                 <div className="space-y-2">
@@ -682,7 +693,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 </div>
               </div>
 
-              {/* Display Total Calculation */}
               {totalHarga > 0 && (
                 <div className={`p-4 ${isDark ? 'bg-green-900/20' : 'bg-green-50'} border-l-4 border-green-500 rounded-lg space-y-2`}>
                   <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-400">
@@ -711,7 +721,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             </>
           )}
 
-          {/* Form Curah - SIMPLIFIED */}
           {isCurah && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -756,7 +765,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 </div>
               </div>
 
-              {/* Display simple summary for Curah */}
               {formData.totalGram && formData.totalHargaCurah && Number(formData.totalGram) > 0 && Number(formData.totalHargaCurah) > 0 && (
                 <div className={`p-4 ${isDark ? 'bg-green-900/20' : 'bg-green-50'} border-l-4 border-green-500 rounded-lg space-y-2`}>
                   <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-400">
@@ -774,7 +782,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             </>
           )}
 
-          {/* Notes */}
           <div className="space-y-2">
             <Label className={textClass}>Catatan (Opsional)</Label>
             <Input
@@ -785,11 +792,10 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             />
           </div>
 
-          {/* Submit Button */}
           <Button 
             onClick={handleSubmitClick} 
             disabled={submitting || (!isPackKartonValid && !isCurahValid)}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-6 text-base transition-all hover:scale-[1.02] shadow-lg"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-6 text-base transition-all hover:scale-[1.02] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5" />
