@@ -152,26 +152,28 @@ export async function GET(request: Request) {
 
         produk: r.produk?.nama || "UNKNOWN",
         produkId: String(produkId),
-        produkCategory: produkCategory,
         produkPcsPerKarton: r.produk?.pcs_per_karton || 1,
+        category: produkCategory, // ✅ Field 'category' untuk component
 
         // 🟦 DATA PACK/KARTON (untuk produk non-curah)
         penjualanKarton: Number(r.penjualan_karton || 0),
         penjualanPcs: Number(r.penjualan_pcs || 0),
         hargaKarton: Number(r.harga_karton || 0),
-        hargaPcs: Number(r.harga_pcs || 0), // Untuk pack ATAU per gram (curah)
+        hargaPcs: Number(r.harga_pcs || 0),
 
-        // 🟩 DATA CURAH (untuk produk curah, harga tetap di harga_pcs)
+        // 🟩 DATA CURAH (untuk produk curah)
         penjualanGram: Number(r.penjualan_gram || 0),
 
-        // 📦 DATA STOK SAAT INI (gunakan nama field yang sama dengan component)
-        stockKarton: stok.stokKarton, // Component pakai 'stockKarton'
-        stockPack: stok.stokPcs,      // Component pakai 'stockPack'
-        stokGram: stok.stokGram,
+        // 📦 DATA STOK - Gunakan nama field yang sama dengan component
+        stockPack: stok.stokPcs,      // Component expect 'stockPack'
+        stockKarton: stok.stokKarton, // Component expect 'stockKarton'
+        stokGram: stok.stokGram,      // Untuk curah
 
-        // 💰 TOTAL (untuk semua jenis produk)
+        // 💰 TOTAL
         total: Number(r.total || 0),
         
+        // 🏪 TOKO & NOTES
+        namaTokoTransaksi: r.nama_toko_transaksi || "UNKNOWN",
         toko: r.nama_toko_transaksi || "UNKNOWN",
         notes: r.notes || "",
       }

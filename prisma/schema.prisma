@@ -14,9 +14,9 @@ model users {
   password   String
   role       String      @default("spg")
   created_at DateTime    @default(now())
+  employee   employees?  @relation("UserToEmployee")
   penjualan  penjualan[]
   stok_spg   stok_spg[]
-  employee   employees?  @relation("UserToEmployee")
 }
 
 model produk {
@@ -75,18 +75,18 @@ model stok_spg {
 }
 
 model employees {
-  id           Int       @id @default(autoincrement())
-  nama         String
-  email        String?
-  posisi       String?
-  kontak       String?
-  alamat       String?
-  status       String    @default("Aktif")
-  join_date    DateTime?
-  user_id      Int?      @unique
-  foto_profil  String?   @db.Text
-  created_at   DateTime  @default(now())
-  user         users?    @relation("UserToEmployee", fields: [user_id], references: [id], onDelete: SetNull)
+  id          Int       @id @default(autoincrement())
+  nama        String
+  email       String?
+  posisi      String?
+  kontak      String?
+  alamat      String?
+  status      String    @default("Aktif")
+  join_date   DateTime?
+  created_at  DateTime  @default(now())
+  foto_profil String?   @db.Text
+  user_id     Int?      @unique
+  user        users?    @relation("UserToEmployee", fields: [user_id], references: [id])
 
   @@index([user_id])
 }
