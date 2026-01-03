@@ -8,7 +8,9 @@ export async function PUT(request: NextRequest) {
 
     const {
       id,
-      totalPcs,
+      penjualanKarton,    // ✅ TAMBAH: Accept karton langsung
+      penjualanPcs,        // ✅ TAMBAH: Accept pcs langsung
+      totalPcs,            // ✅ KEEP: Backward compatibility
       hargaPcs,
       hargaKarton,
       stockPack,
@@ -55,8 +57,24 @@ export async function PUT(request: NextRequest) {
     const updateData: any = {};
     let needRecalcTotal = false;
 
-    // Handle totalPcs (akan auto-convert ke karton + pcs)
-    if (totalPcs !== undefined && totalPcs !== null && totalPcs !== '') {
+    // ✅ PRIORITAS 1: Handle penjualanKarton dan penjualanPcs secara terpisah
+    if (penjualanKarton !== undefined && penjualanKarton !== null && penjualanKarton !== '') {
+      updateData.penjualan_karton = Number(penjualanKarton);
+      needRecalcTotal = true;
+      console.log('📦 Update penjualan_karton:', updateData.penjualan_karton);
+    }
+
+    if (penjualanPcs !== undefined && penjualanPcs !== null && penjualanPcs !== '') {
+      updateData.penjualan_pcs = Number(penjualanPcs);
+      needRecalcTotal = true;
+      console.log('📦 Update penjualan_pcs:', updateData.penjualan_pcs);
+    }
+
+    // ✅ PRIORITAS 2: Handle totalPcs (untuk backward compatibility)
+    // Hanya digunakan jika penjualanKarton dan penjualanPcs tidak dikirim
+    if (!updateData.hasOwnProperty('penjualan_karton') && 
+        !updateData.hasOwnProperty('penjualan_pcs') &&
+        totalPcs !== undefined && totalPcs !== null && totalPcs !== '') {
       const pcsPerKarton = existingSale.produk.pcs_per_karton;
       updateData.penjualan_karton = Math.floor(Number(totalPcs) / pcsPerKarton);
       updateData.penjualan_pcs = Number(totalPcs) % pcsPerKarton;
