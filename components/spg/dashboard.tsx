@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, createContext, useContext } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import SPGHeader from "@/components/spg/header"
 import SPGSidebar from "@/components/spg/sidebar"
 import SalesReportForm from "@/components/spg/sales-report-form"
@@ -22,9 +23,46 @@ const ThemeContext = createContext<{
 export const useTheme = () => useContext(ThemeContext)
 
 export default function SPGDashboard() {
-  const [currentView, setCurrentView] = useState<ViewType>("laporan")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // ✅ Ambil view dari URL, default "laporan"
+  const viewFromUrl = (searchParams.get('view') as ViewType) || "laporan"
+  const [currentView, setCurrentView] = useState<ViewType>(viewFromUrl)
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>("dark")
+
+  // ✅ PREVENT BACK TO LOGIN - Tapi allow back antar menu
+  useEffect(() => {
+    // Check auth
+    const token = localStorage.getItem("token")
+    const role = localStorage.getItem("role")?.toLowerCase()
+    
+    if (!token || role !== 'spg') {
+      window.location.replace("/")
+      return
+    }
+
+    // Track navigation state
+    const handlePopState = () => {
+      const view = new URLSearchParams(window.location.search).get('view') as ViewType
+      if (view) {
+        setCurrentView(view)
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // Sync URL dengan currentView
+  useEffect(() => {
+    const urlView = searchParams.get('view') as ViewType
+    if (urlView && urlView !== currentView) {
+      setCurrentView(urlView)
+    }
+  }, [searchParams])
 
   // Load theme from localStorage
   useEffect(() => {
@@ -44,14 +82,18 @@ export default function SPGDashboard() {
     setTheme(prev => prev === "dark" ? "light" : "dark")
   }
 
+  // ✅ FIXED: Pakai router.push untuk history navigation
   const handleViewChange = (view: ViewType) => {
     setCurrentView(view)
-    setSidebarOpen(false) // Tutup sidebar setelah klik menu
+    setSidebarOpen(false)
+    
+    // Update URL dengan history (bisa back/forward)
+    router.push(`/spg/dashboard?view=${view}`, { scroll: false })
   }
 
   const handleLogoClick = () => {
     if (currentView !== "laporan") {
-      setCurrentView("laporan")
+      handleViewChange("laporan")
     } else {
       window.location.reload()
     }

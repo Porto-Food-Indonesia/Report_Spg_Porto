@@ -15,29 +15,49 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   const { user, isLoading } = useAuth()
   const [authorized, setAuthorized] = useState(false)
 
+  // ✅ FIXED: Pakai window.location.replace() untuk hapus history
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
-        router.replace("/") // replace biar gak bisa back
+        // Hard redirect tanpa history
+        window.location.replace("/")
       } else if (
         requiredRole &&
         user.role?.toLowerCase() !== requiredRole.toLowerCase()
       ) {
-        router.replace("/")
+        // Hard redirect tanpa history
+        window.location.replace("/")
       } else {
         setAuthorized(true)
       }
     }
-  }, [user, isLoading, requiredRole, router])
+  }, [user, isLoading, requiredRole])
+
+  // ✅ BONUS: Prevent browser back button
+  useEffect(() => {
+    if (authorized) {
+      const preventBack = () => {
+        window.history.pushState(null, '', window.location.href)
+      }
+      
+      // Push state pertama kali
+      preventBack()
+      
+      // Listen untuk back button
+      window.addEventListener('popstate', preventBack)
+      
+      return () => window.removeEventListener('popstate', preventBack)
+    }
+  }, [authorized])
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950">
         <div className="text-center">
           <div className="inline-block">
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
           </div>
-          <p className="mt-4 text-slate-600">Loading...</p>
+          <p className="mt-4 text-slate-300 font-medium">Loading...</p>
         </div>
       </div>
     )

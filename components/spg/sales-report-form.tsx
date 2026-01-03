@@ -41,6 +41,32 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
   
+  // Handle Android back button
+  useEffect(() => {
+    const handleBackButton = (e: PopStateEvent) => {
+      e.preventDefault()
+      if (showSearchModal) {
+        setShowSearchModal(false)
+        window.history.pushState(null, '', window.location.pathname)
+      } else if (showConfirmModal) {
+        setShowConfirmModal(false)
+        window.history.pushState(null, '', window.location.pathname)
+      } else if (showSuccessModal) {
+        setShowSuccessModal(false)
+        window.history.pushState(null, '', window.location.pathname)
+      }
+    }
+
+    if (showSearchModal || showConfirmModal || showSuccessModal) {
+      window.history.pushState(null, '', window.location.pathname)
+      window.addEventListener('popstate', handleBackButton)
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handleBackButton)
+    }
+  }, [showSearchModal, showConfirmModal, showSuccessModal])
+  
   const [formData, setFormData] = useState({
     tanggal: new Date().toISOString().split("T")[0],
     produkId: "",
@@ -380,8 +406,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`font-semibold ${textClass} truncate`}>{prod.nama}</p>
-                          <p className={`text-xs ${textSecondary}`}>SKU: {prod.sku}</p>
+                          <p className={`font-semibold ${textClass} break-words`}>{prod.nama}</p>
+                          <p className={`text-xs ${textSecondary} mt-0.5`}>SKU: {prod.sku}</p>
                           {!isCurah && (
                             <p className={`text-xs ${textSecondary} mt-1`}>
                               {prod.pcs_per_karton} pack/karton

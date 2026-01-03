@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, createContext, useContext } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import AdminHeader from "@/components/admin/header"
 import AdminSidebar from "@/components/admin/sidebar"
 import AnalyticsView from "@/components/admin/analytics-view"
@@ -32,7 +33,12 @@ const ThemeContext = createContext<{
 export const useTheme = () => useContext(ThemeContext)
 
 export default function AdminDashboard() {
-  const [currentView, setCurrentView] = useState<ViewType>("analytics")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // ✅ Ambil view dari URL, default "analytics"
+  const viewFromUrl = (searchParams.get('view') as ViewType) || "analytics"
+  const [currentView, setCurrentView] = useState<ViewType>(viewFromUrl)
   const [theme, setTheme] = useState<Theme>("dark")
   const [notifications] = useState<Notification[]>([
     {
@@ -61,6 +67,38 @@ export default function AdminDashboard() {
     }
   ])
 
+  // ✅ PREVENT BACK TO LOGIN - Tapi allow back antar menu
+  useEffect(() => {
+    // Check auth
+    const token = localStorage.getItem("token")
+    const role = localStorage.getItem("role")?.toLowerCase()
+    
+    if (!token || role !== 'admin') {
+      window.location.replace("/")
+      return
+    }
+
+    // Track navigation state
+    const handlePopState = () => {
+      const view = new URLSearchParams(window.location.search).get('view') as ViewType
+      if (view) {
+        setCurrentView(view)
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // Sync URL dengan currentView
+  useEffect(() => {
+    const urlView = searchParams.get('view') as ViewType
+    if (urlView && urlView !== currentView) {
+      setCurrentView(urlView)
+    }
+  }, [searchParams])
+
   // Load theme from localStorage
   useEffect(() => {
     const savedTheme = localStorage.getItem("admin-theme") as Theme
@@ -79,16 +117,23 @@ export default function AdminDashboard() {
     setTheme(prev => prev === "dark" ? "light" : "dark")
   }
 
+  // ✅ FIXED: Pakai router.push untuk history navigation
+  const handleViewChange = (view: ViewType) => {
+    setCurrentView(view)
+    // Update URL dengan history (bisa back/forward)
+    router.push(`/admin/dashboard?view=${view}`, { scroll: false })
+  }
+
   const handleLogoClick = () => {
     if (currentView !== "analytics") {
-      setCurrentView("analytics")
+      handleViewChange("analytics")
     } else {
       window.location.reload()
     }
   }
 
   const handleNotificationClick = () => {
-    setCurrentView("laporan")
+    handleViewChange("laporan")
   }
 
   const notificationCount = notifications.filter(n => !n.isRead).length
@@ -104,7 +149,7 @@ export default function AdminDashboard() {
         {/* Sidebar */}
         <AdminSidebar 
           currentView={currentView} 
-          onViewChange={setCurrentView}
+          onViewChange={handleViewChange}
           theme={theme}
         />
 

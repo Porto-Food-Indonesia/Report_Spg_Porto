@@ -53,6 +53,7 @@ export default function AdminHeader({
   const [isScrolled, setIsScrolled] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false) // ✅ TAMBAH INI
   
   // State untuk notifikasi dari API
   const [localNotifications, setLocalNotifications] = useState<Notification[]>([])
@@ -206,10 +207,37 @@ export default function AdminHeader({
     }
   }, [])
 
-  const handleLogout = () => {
-    if (typeof window !== "undefined" && window.localStorage) {
+  // ✅ FIXED: Logout yang benar dengan API call
+  const handleLogout = async () => {
+    if (isLoggingOut) return // Prevent double click
+    
+    setIsLoggingOut(true)
+
+    try {
+      // 1. Call API logout untuk hapus cookie di server
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      // 2. Clear semua data dari localStorage
+      localStorage.removeItem("token")
+      localStorage.removeItem("role")
+      localStorage.removeItem("user")
+      localStorage.removeItem("admin-theme")
+      localStorage.removeItem("readNotifications")
+      
+      // 3. Hard redirect tanpa history - PASTI GA BISA BACK!
+      window.location.replace("/")
+      
+    } catch (error) {
+      console.error("Logout error:", error)
+      
+      // Tetap clear localStorage dan redirect meskipun API error
       localStorage.clear()
-      window.location.href = "/"
+      window.location.replace("/")
     }
   }
 
@@ -547,11 +575,16 @@ export default function AdminHeader({
               <DropdownMenuSeparator className={isDark ? 'bg-slate-700' : 'bg-slate-200'} />
               
               <DropdownMenuItem 
-                onClick={handleLogout} 
-                className="text-red-400 hover:text-red-300 cursor-pointer hover:bg-red-500/10 text-sm py-3 px-3 font-medium rounded-lg mx-1 mb-1 group"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className={`
+                  text-red-400 hover:text-red-300 cursor-pointer hover:bg-red-500/10 
+                  text-sm py-3 px-3 font-medium rounded-lg mx-1 mb-1 group
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                `}
               >
-                <LogOut className="w-4 h-4 mr-3 group-hover:translate-x-1 transition-transform" />
-                <span>Logout</span>
+                <LogOut className={`w-4 h-4 mr-3 transition-transform ${isLoggingOut ? 'animate-pulse' : 'group-hover:translate-x-1'}`} />
+                <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

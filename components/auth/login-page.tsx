@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -16,7 +15,6 @@ import Image from "next/image"
 import { Mail, Lock, AlertCircle, EyeOff } from "lucide-react"
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -24,6 +22,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [pupilPosition, setPupilPosition] = useState({ x: 0, y: 0 })
   const eyeButtonRef = useRef<HTMLButtonElement>(null)
+
+  // ✅ FIXED: Protect halaman login - pakai window.location.replace()
+  useEffect(() => {
+    const token = localStorage.getItem("token")
+    if (token) {
+      const role = localStorage.getItem("role")?.toLowerCase()
+      if (role === "admin") {
+        window.location.replace("/admin/dashboard")
+      } else if (role === "spg") {
+        window.location.replace("/spg/dashboard")
+      }
+    }
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,11 +63,11 @@ export default function LoginPage() {
 
       const role = data.user.role.toLowerCase()
 
-      // ✅ Gunakan window.location.href untuk hard redirect
+      // ✅ FIXED: Hard redirect tanpa history
       if (role === "admin") {
-        window.location.href = "/admin/dashboard"
+        window.location.replace("/admin/dashboard")
       } else if (role === "spg") {
-        window.location.href = "/spg/dashboard"
+        window.location.replace("/spg/dashboard")
       } else {
         setError("Role tidak valid. Hubungi admin.")
         setLoading(false)
@@ -168,7 +179,6 @@ export default function LoginPage() {
                       fill="none"
                       className="relative"
                     >
-                      {/* Eye outline - lebih tebal */}
                       <path
                         d="M2.8 14.8C2.6 14.5 2.5 14.3 2.45 14.1C2.42 13.95 2.42 13.75 2.45 13.6C2.5 13.4 2.6 13.2 2.8 12.9C4.2 10.6 8.2 5 14 5C19.8 5 23.8 10.6 25.2 12.9C25.4 13.2 25.5 13.4 25.55 13.6C25.58 13.75 25.58 13.95 25.55 14.1C25.5 14.3 25.4 14.5 25.2 14.8C23.8 17.1 19.8 22.7 14 22.7C8.2 22.7 4.2 17.1 2.8 14.8Z"
                         stroke="currentColor"
@@ -176,45 +186,11 @@ export default function LoginPage() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
-                      {/* Eyeball - bagian putih mata */}
-                      <circle
-                        cx="14"
-                        cy="13.8"
-                        r="5.5"
-                        fill="white"
-                        opacity="0.9"
-                      />
-                      {/* Iris - bagian berwarna */}
-                      <circle
-                        cx="14"
-                        cy="13.8"
-                        r="4"
-                        fill="currentColor"
-                        opacity="0.7"
-                      />
-                      {/* Pupil - hitam dengan animasi mengikuti mouse */}
-                      <circle
-                        cx={14 + pupilPosition.x}
-                        cy={13.8 + pupilPosition.y}
-                        r="2.2"
-                        fill="black"
-                      />
-                      {/* Highlight - pantulan cahaya */}
-                      <circle
-                        cx={13 + pupilPosition.x}
-                        cy={12.8 + pupilPosition.y}
-                        r="1"
-                        fill="white"
-                        opacity="0.9"
-                      />
-                      {/* Highlight tambahan kecil */}
-                      <circle
-                        cx={14.5 + pupilPosition.x}
-                        cy={13.2 + pupilPosition.y}
-                        r="0.5"
-                        fill="white"
-                        opacity="0.7"
-                      />
+                      <circle cx="14" cy="13.8" r="5.5" fill="white" opacity="0.9" />
+                      <circle cx="14" cy="13.8" r="4" fill="currentColor" opacity="0.7" />
+                      <circle cx={14 + pupilPosition.x} cy={13.8 + pupilPosition.y} r="2.2" fill="black" />
+                      <circle cx={13 + pupilPosition.x} cy={12.8 + pupilPosition.y} r="1" fill="white" opacity="0.9" />
+                      <circle cx={14.5 + pupilPosition.x} cy={13.2 + pupilPosition.y} r="0.5" fill="white" opacity="0.7" />
                     </svg>
                   )}
                 </button>

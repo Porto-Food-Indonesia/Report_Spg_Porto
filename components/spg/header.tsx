@@ -37,6 +37,7 @@ export default function SPGHeader({
   const [user, setUser] = useState<UserData | null>(null)
   const [isScrolled, setIsScrolled] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const isDark = theme === 'dark'
 
@@ -60,9 +61,38 @@ export default function SPGHeader({
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  const handleLogout = () => {
-    localStorage.clear()
-    window.location.href = "/"
+  // ✅ FIXED: Logout yang benar dengan API call
+  const handleLogout = async () => {
+    if (isLoggingOut) return // Prevent double click
+    
+    setIsLoggingOut(true)
+
+    try {
+      // 1. Call API logout untuk hapus cookie di server
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      // 2. Clear semua data dari localStorage
+      localStorage.removeItem("token")
+      localStorage.removeItem("role")
+      localStorage.removeItem("user")
+      
+      // 3. Hard redirect tanpa history - PASTI GA BISA BACK!
+      window.location.replace("/")
+      
+    } catch (error) {
+      console.error("Logout error:", error)
+      
+      // Tetap clear localStorage dan redirect meskipun API error
+      localStorage.removeItem("token")
+      localStorage.removeItem("role")
+      localStorage.removeItem("user")
+      window.location.replace("/")
+    }
   }
 
   const handleLogoClick = () => {
@@ -285,10 +315,15 @@ export default function SPGHeader({
               
               <DropdownMenuItem 
                 onClick={handleLogout} 
-                className="text-red-400 hover:text-red-300 cursor-pointer hover:bg-red-500/10 text-sm py-3 px-3 font-medium rounded-lg mx-1 mb-1 group"
+                disabled={isLoggingOut}
+                className={`
+                  text-red-400 hover:text-red-300 cursor-pointer hover:bg-red-500/10 
+                  text-sm py-3 px-3 font-medium rounded-lg mx-1 mb-1 group
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                `}
               >
-                <LogOut className="w-4 h-4 mr-3 group-hover:translate-x-1 transition-transform" />
-                <span>Logout</span>
+                <LogOut className={`w-4 h-4 mr-3 transition-transform ${isLoggingOut ? 'animate-pulse' : 'group-hover:translate-x-1'}`} />
+                <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
