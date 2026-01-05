@@ -1,4 +1,3 @@
-// File: /api/employees/upload-photo/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 
@@ -8,13 +7,21 @@ export async function POST(req: NextRequest) {
     const { employeeId, photoUrl } = body
 
     if (!employeeId || !photoUrl) {
-      return NextResponse.json(
+      return NextResponse. json(
         { error: "Employee ID dan foto harus diisi" },
         { status: 400 }
       )
     }
 
-    // Update foto_profil di tabel employees
+    // Validasi base64 length
+    if (photoUrl.length > 5000000) { // ~5MB
+      return NextResponse. json(
+        { error: "File terlalu besar setelah compress" },
+        { status: 413 }
+      )
+    }
+
+    // Update foto_profil
     await prisma.employees.update({
       where: { id: parseInt(employeeId) },
       data: { foto_profil: photoUrl }
@@ -22,9 +29,9 @@ export async function POST(req: NextRequest) {
 
     console.log("✅ Profile photo updated for employee:", employeeId)
 
-    return NextResponse.json({ 
-      success: true, 
-      message: "Photo uploaded successfully" 
+    return NextResponse.json({
+      success: true,
+      message: "Photo uploaded successfully"
     })
   } catch (error) {
     console.error("❌ Upload photo error:", error)

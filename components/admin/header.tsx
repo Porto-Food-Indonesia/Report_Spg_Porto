@@ -17,7 +17,7 @@ interface UserData {
   id: string
   nama: string
   email: string
-  role: string
+  role:  string
 }
 
 interface AdminHeaderProps {
@@ -25,13 +25,13 @@ interface AdminHeaderProps {
   onLogoClick?: () => void
   onNotificationClick?: () => void
   notificationCount?: number
-  notifications?: Notification[]
+  notifications?:  Notification[]
   theme?: 'dark' | 'light'
   onThemeToggle?: () => void
 }
 
 interface Notification {
-  id: string
+  id:  string
   type: "laporan" | "info" | "warning"
   nama: string
   message: string
@@ -50,10 +50,12 @@ export default function AdminHeader({
 }: AdminHeaderProps) {
   const router = useRouter()
   const [user, setUser] = useState<UserData | null>(null)
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
   const [isScrolled, setIsScrolled] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] = useState(false) // ✅ TAMBAH INI
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false)
   
   // State untuk notifikasi dari API
   const [localNotifications, setLocalNotifications] = useState<Notification[]>([])
@@ -61,6 +63,29 @@ export default function AdminHeader({
   const [loadingNotifications, setLoadingNotifications] = useState(false)
 
   const isDark = theme === 'dark'
+
+  // ✅ Fetch profile photo dari employee profile
+  const fetchProfilePhoto = async (userId: string) => {
+    try {
+      setIsLoadingProfile(true)
+      const response = await fetch("/api/employees/list")
+      
+      if (!response.ok) return
+      
+      const employees = await response.json()
+      const currentEmployee = employees.find((emp: any) => 
+        String(emp.userId || emp.id).trim().toLowerCase() === String(userId).trim().toLowerCase()
+      )
+      
+      if (currentEmployee? .  profilePhoto) {
+        setProfilePhoto(currentEmployee.profilePhoto)
+      }
+    } catch (error) {
+      console.error("Error fetching profile photo:", error)
+    } finally {
+      setIsLoadingProfile(false)
+    }
+  }
 
   // Fetch notifications dari API sales yang sudah ada
   const fetchNotifications = async () => {
@@ -76,7 +101,7 @@ export default function AdminHeader({
       
       if (Array.isArray(data)) {
         const tenDaysAgo = new Date()
-        tenDaysAgo.setDate(tenDaysAgo.getDate() - 10)
+        tenDaysAgo. setDate(tenDaysAgo.getDate() - 10)
         
         const recentSales = data
           .filter(sale => new Date(sale.created_at) >= tenDaysAgo)
@@ -85,12 +110,12 @@ export default function AdminHeader({
         const readNotifs = JSON.parse(localStorage.getItem('readNotifications') || '[]')
         
         const formattedNotifications = recentSales.map(sale => {
-          let type: "laporan" | "info" | "warning" = "laporan"
+          let type:  "laporan" | "info" | "warning" = "laporan"
           if (sale.total > 1000000) type = "info"
           else if (sale.total < 50000) type = "warning"
           
           let message = ""
-          if (sale.produk?.category === "Curah") {
+          if (sale.produk?. category === "Curah") {
             message = `Melaporkan penjualan ${sale.penjualan_gram}gr ${sale.produk?.nama || 'produk'} di ${sale.nama_toko_transaksi}`
           } else {
             const parts = []
@@ -100,12 +125,12 @@ export default function AdminHeader({
           }
           
           return {
-            id: sale.id.toString(),
+            id: sale.id. toString(),
             type,
             nama: sale.user?.nama || 'SPG',
             message,
             tanggal: sale.created_at,
-            isRead: readNotifs.includes(sale.id.toString())
+            isRead: readNotifs.includes(sale.id. toString())
           }
         })
         
@@ -130,7 +155,7 @@ export default function AdminHeader({
       setLocalNotificationCount(prev => Math.max(0, prev - 1))
       
       const readNotifs = JSON.parse(localStorage.getItem('readNotifications') || '[]')
-      if (!readNotifs.includes(notificationId)) {
+      if (! readNotifs.includes(notificationId)) {
         readNotifs.push(notificationId)
         localStorage.setItem('readNotifications', JSON.stringify(readNotifs))
       }
@@ -142,7 +167,7 @@ export default function AdminHeader({
   const markAllAsRead = async () => {
     try {
       const allIds = localNotifications.map(n => n.id)
-      setLocalNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+      setLocalNotifications(prev => prev. map(n => ({ ...n, isRead: true })))
       setLocalNotificationCount(0)
       localStorage.setItem('readNotifications', JSON.stringify(allIds))
     } catch (error) {
@@ -152,14 +177,14 @@ export default function AdminHeader({
 
   const handleNotificationClick = (notificationId: string) => {
     markAsRead(notificationId)
-    router.push(`/admin/laporan?id=${notificationId}`)
+    router.push(`/admin/laporan? id=${notificationId}`)
     setShowNotifications(false)
   }
 
   const getRelativeTime = (tanggal: string) => {
     const now = new Date()
     const date = new Date(tanggal)
-    const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
+    const diff = Math.floor((now. getTime() - date.getTime()) / 1000)
 
     if (diff < 60) return "Baru saja"
     if (diff < 3600) return `${Math.floor(diff / 60)} menit yang lalu`
@@ -179,11 +204,14 @@ export default function AdminHeader({
   }
 
   useEffect(() => {
-    const userStr = typeof window !== "undefined" ? localStorage?.getItem("user") : null
+    const userStr = typeof window !== "undefined" ? localStorage?. getItem("user") : null
     if (userStr) {
       try {
         const userData = JSON.parse(userStr)
         setUser(userData)
+        
+        // ✅ Fetch profile photo
+        fetchProfilePhoto(userData.id)
       } catch (error) {
         console.error("Error parsing user data:", error)
       }
@@ -229,7 +257,7 @@ export default function AdminHeader({
       localStorage.removeItem("admin-theme")
       localStorage.removeItem("readNotifications")
       
-      // 3. Hard redirect tanpa history - PASTI GA BISA BACK!
+      // 3. Hard redirect tanpa history - PASTI GA BISA BACK! 
       window.location.replace("/")
       
     } catch (error) {
@@ -261,7 +289,7 @@ export default function AdminHeader({
   const getInitials = (fullName: string) => {
     const names = fullName.split(" ")
     if (names.length === 1) {
-      return names[0].substring(0, 2).toUpperCase()
+      return names[0].  substring(0, 2).toUpperCase()
     }
     return (names[0][0] + names[names.length - 1][0]).toUpperCase()
   }
@@ -292,7 +320,7 @@ export default function AdminHeader({
   const borderClass = isDark ? "border-slate-700/50" : "border-slate-200"
   const textClass = isDark ? "text-white" : "text-slate-900"
   const textSecondaryClass = isDark ? "text-slate-400" : "text-slate-600"
-  const hoverBgClass = isDark ? "hover:bg-slate-700/50" : "hover:bg-slate-100"
+  const hoverBgClass = isDark ?  "hover:bg-slate-700/50" : "hover:bg-slate-100"
 
   return (
     <header 
@@ -305,7 +333,7 @@ export default function AdminHeader({
         }
       `}
     >
-      <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-3.5">
+      <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-2. 5 sm:py-3 lg:py-3.5">
         {/* Left Section */}
         <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0 flex-1">
           {onMenuClick && (
@@ -378,7 +406,7 @@ export default function AdminHeader({
                 size="icon" 
                 className={`relative ${hoverBgClass} h-9 w-9 lg:h-10 lg:w-10 rounded-xl transition-all duration-300 hover:scale-105 hidden sm:flex group`}
               >
-                <Bell className={`w-4 h-4 lg:w-5 lg:h-5 ${textSecondaryClass} group-hover:${textClass} group-hover:animate-bounce transition-colors`} />
+                <Bell className={`w-4 h-4 lg:w-5 lg:h-5 ${textSecondaryClass} group-hover: ${textClass} group-hover:animate-bounce transition-colors`} />
                 {displayCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-br from-red-500 to-pink-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg animate-pulse">
                     {displayCount > 9 ? "9+" : displayCount}
@@ -411,10 +439,10 @@ export default function AdminHeader({
                 )}
               </DropdownMenuLabel>
               
-              <DropdownMenuSeparator className={isDark ? 'bg-slate-700' : 'bg-slate-200'} />
+              <DropdownMenuSeparator className={isDark ?  'bg-slate-700' : 'bg-slate-200'} />
               
               <div className="max-h-[360px] overflow-y-auto">
-                {loadingNotifications ? (
+                {loadingNotifications ?  (
                   <div className="px-4 py-8 text-center">
                     <div className="w-8 h-8 border-4 border-slate-600 border-t-blue-500 rounded-full animate-spin mx-auto mb-3" />
                     <p className={`text-sm ${textSecondaryClass}`}>Memuat notifikasi...</p>
@@ -422,25 +450,25 @@ export default function AdminHeader({
                 ) : displayNotifications.length > 0 ? (
                   displayNotifications.map((notif) => (
                     <DropdownMenuItem 
-                      key={notif.id}
+                      key={notif. id}
                       onClick={() => handleNotificationClick(notif.id)}
                       className={`
                         cursor-pointer px-4 py-3 ${hoverBgClass}
                         transition-colors mx-1 rounded-lg mb-1
-                        ${!notif.isRead ? (isDark ? 'bg-slate-700/30' : 'bg-slate-100') : ''}
+                        ${! notif.isRead ? (isDark ? 'bg-slate-700/30' : 'bg-slate-100') : ''}
                       `}
                     >
                       <div className="flex gap-3 w-full">
                         <div className={`
                           w-10 h-10 rounded-full flex-shrink-0
                           bg-gradient-to-br ${
-                            notif.type === "laporan" ? "from-emerald-500 to-teal-500" :
-                            notif.type === "warning" ? "from-orange-500 to-red-500" :
+                            notif.type === "laporan" ? "from-emerald-500 to-teal-500" : 
+                            notif.type === "warning" ? "from-orange-500 to-red-500" : 
                             "from-blue-500 to-cyan-500"
                           }
                           flex items-center justify-center text-white font-bold text-sm
                         `}>
-                          {notif.nama.charAt(0).toUpperCase()}
+                          {notif.nama. charAt(0).toUpperCase()}
                         </div>
                         
                         <div className="flex-1 min-w-0">
@@ -448,7 +476,7 @@ export default function AdminHeader({
                             <p className={`text-sm font-semibold ${textClass} truncate`}>
                               {notif.nama}
                             </p>
-                            {!notif.isRead && (
+                            {! notif.isRead && (
                               <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1" />
                             )}
                           </div>
@@ -472,7 +500,7 @@ export default function AdminHeader({
               
               {displayCount > 0 && (
                 <>
-                  <DropdownMenuSeparator className={isDark ? 'bg-slate-700' : 'bg-slate-200'} />
+                  <DropdownMenuSeparator className={isDark ?  'bg-slate-700' : 'bg-slate-200'} />
                   <div className="p-2">
                     <Button 
                       onClick={handleViewAllNotifications}
@@ -492,7 +520,7 @@ export default function AdminHeader({
             <DropdownMenuTrigger asChild>
               <Button 
                 variant="ghost" 
-                className={`flex items-center gap-2 lg:gap-3 ${hoverBgClass} h-auto px-2 lg:px-3 py-1.5 lg:py-2 rounded-xl transition-all duration-300 hover:scale-105 group`}
+                className={`flex items-center gap-2 lg:gap-3 ${hoverBgClass} h-auto px-2 lg:px-3 py-1. 5 lg:py-2 rounded-xl transition-all duration-300 hover:scale-105 group`}
               >
                 <div className="hidden xl:flex flex-col items-end min-w-0">
                   <span className={`text-sm font-semibold ${textClass} truncate max-w-[140px] 2xl:max-w-[200px] transition-colors`}>
@@ -503,43 +531,70 @@ export default function AdminHeader({
                   </span>
                 </div>
                 
+                {/* Avatar dengan foto atau inisial */}
                 <div className="relative">
                   <div className={`
-                    absolute -inset-1 bg-gradient-to-br ${user ? getAvatarGradient(user.nama) : 'from-blue-500 to-purple-600'} 
+                    absolute -inset-1 bg-gradient-to-br ${user ?   getAvatarGradient(user.nama) : 'from-blue-500 to-purple-600'} 
                     rounded-full blur opacity-50 group-hover:opacity-100 transition duration-300
                   `} />
-                  <div 
-                    className={`
-                      relative
-                      w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 xl:w-11 xl:h-11
-                      bg-gradient-to-br ${user ? getAvatarGradient(user.nama) : 'from-blue-500 to-purple-600'}
-                      rounded-full flex items-center justify-center 
-                      text-white text-xs lg:text-sm xl:text-base
-                      font-bold shadow-lg flex-shrink-0
-                      ring-2 ${isDark ? 'ring-slate-700' : 'ring-slate-200'} group-hover:ring-4 transition-all duration-300
-                    `}
-                  >
-                    {user ? getInitials(user.nama) : "A"}
-                  </div>
+                  {profilePhoto && ! isLoadingProfile ?   (
+                    // ✅ Tampilkan foto jika tersedia
+                    <img
+                      src={profilePhoto}
+                      alt={user?. nama || "Profile"}
+                      className={`
+                        relative
+                        w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 xl:w-11 xl:h-11
+                        rounded-full object-cover flex-shrink-0
+                        ring-2 ${isDark ? 'ring-slate-700' : 'ring-slate-200'} 
+                        group-hover:ring-4 transition-all duration-300 shadow-lg
+                      `}
+                    />
+                  ) : (
+                    // ✅ Fallback ke inisial jika belum ada foto
+                    <div 
+                      className={`
+                        relative
+                        w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 xl:w-11 xl:h-11
+                        bg-gradient-to-br ${user ?  getAvatarGradient(user.nama) : 'from-blue-500 to-purple-600'}
+                        rounded-full flex items-center justify-center 
+                        text-white text-xs lg:text-sm xl:text-base
+                        font-bold shadow-lg flex-shrink-0
+                        ring-2 ${isDark ? 'ring-slate-700' : 'ring-slate-200'} 
+                        group-hover:ring-4 transition-all duration-300
+                      `}
+                    >
+                      {user ?   getInitials(user.nama) : "A"}
+                    </div>
+                  )}
                 </div>
               </Button>
             </DropdownMenuTrigger>
             
             <DropdownMenuContent 
               align="end" 
-              className={`w-64 sm:w-72 mt-2 rounded-xl border ${borderClass} shadow-2xl ${isDark ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}
+              className={`w-64 sm:w-72 mt-2 rounded-xl border ${borderClass} shadow-2xl ${isDark ? 'bg-slate-800 text-white' :  'bg-white text-slate-900'}`}
               sideOffset={8}
             >
               <DropdownMenuLabel className="pb-3">
                 <div className="flex items-center gap-3">
-                  <div 
-                    className={`
-                      w-12 h-12 bg-gradient-to-br ${user ? getAvatarGradient(user.nama) : 'from-blue-500 to-purple-600'}
-                      rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg
-                    `}
-                  >
-                    {user ? getInitials(user.nama) : "A"}
-                  </div>
+                  {/* Avatar dropdown dengan foto atau inisial */}
+                  {profilePhoto && !isLoadingProfile ?   (
+                    <img
+                      src={profilePhoto}
+                      alt={user?.nama || "Profile"}
+                      className="w-12 h-12 rounded-xl object-cover shadow-lg flex-shrink-0"
+                    />
+                  ) : (
+                    <div 
+                      className={`
+                        w-12 h-12 bg-gradient-to-br ${user ?  getAvatarGradient(user.nama) : 'from-blue-500 to-purple-600'}
+                        rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg flex-shrink-0
+                      `}
+                    >
+                      {user ? getInitials(user.nama) : "A"}
+                    </div>
+                  )}
                   <div className="flex flex-col min-w-0">
                     <p className={`text-sm font-bold ${textClass} truncate`}>
                       {user?.nama || "Admin"}
@@ -572,7 +627,7 @@ export default function AdminHeader({
                 <span>Pengaturan</span>
               </DropdownMenuItem>
               
-              <DropdownMenuSeparator className={isDark ? 'bg-slate-700' : 'bg-slate-200'} />
+              <DropdownMenuSeparator className={isDark ?  'bg-slate-700' : 'bg-slate-200'} />
               
               <DropdownMenuItem 
                 onClick={handleLogout}

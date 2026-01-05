@@ -20,17 +20,18 @@ export async function GET(req: NextRequest) {
 
     // Transform to match frontend expectations
     const transformedEmployees = employees.map(emp => ({
-      id: emp.id.toString(),
+      id:  emp.id. toString(),
       name: emp.nama,
       email: emp.email || '',
       role: emp.posisi || '',
-      status: emp.status,
-      joinDate: emp.join_date ? emp.join_date.toISOString().split('T')[0] : '',
-      userId: emp.user_id?.toString() || null,
+      status: emp. status,
+      joinDate: emp.join_date ?  emp.join_date.toISOString().split('T')[0] : '',
+      userId: emp.user_id ?  emp.user_id.toString() : null,  // ← Pastikan konsisten (convert ke string)
       profilePhoto: emp.foto_profil || null,
     }))
 
     console.log("📊 Fetched employees:", transformedEmployees.length)
+    console.log("📋 Sample employee with userId:", transformedEmployees[0])
     
     return NextResponse.json(transformedEmployees)
   } catch (error) {

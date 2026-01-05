@@ -16,12 +16,12 @@ export async function POST(request: Request) {
       namaTokoTransaksi,
       notes,
       category, // "Pack/Karton" atau "Curah"
-      // Pack/Karton fields - UPDATED
-      jumlahKarton,  // FIELD BARU - jumlah karton yang terjual
-      jumlahPack,    // FIELD BARU - jumlah pack yang terjual
-      totalPcs,      // Total pack (sudah dihitung dari frontend)
-      hargaPcs,      // Bisa null jika tidak jual pack
-      hargaKarton,   // Bisa null jika tidak jual karton
+      // Pack/Karton fields
+      jumlahKarton,
+      jumlahPack,
+      totalPcs,
+      hargaPcs,
+      hargaKarton,
       stockPack,
       stockKarton,
       // Curah fields
@@ -61,37 +61,31 @@ export async function POST(request: Request) {
 
     // ✅ PROSES BERDASARKAN KATEGORI
     if (category === "Pack/Karton") {
-      // Validasi Pack/Karton - UPDATED LOGIC
+      // Validasi Pack/Karton - ALLOW ZERO VALUES
       const kartonQty = Number(jumlahKarton) || 0
       const packQty = Number(jumlahPack) || 0
       
-      // Minimal harus ada penjualan karton atau pack
-      if (kartonQty === 0 && packQty === 0) {
+      // ✅ Penjualan bisa 0 (untuk pencatatan stok saja)
+      // Hanya validasi harga jika ada penjualan
+      
+      if (kartonQty > 0 && (!hargaKarton || Number(hargaKarton) <= 0)) {
         return NextResponse.json(
-          { error: "Minimal harus ada penjualan karton atau pack" },
+          { error: "Harga per karton wajib diisi (lebih dari 0) jika ada penjualan karton" },
           { status: 400 }
         )
       }
 
-      // Validasi harga sesuai dengan yang dijual
-      if (kartonQty > 0 && !hargaKarton) {
+      if (packQty > 0 && (!hargaPcs || Number(hargaPcs) <= 0)) {
         return NextResponse.json(
-          { error: "Harga per karton wajib diisi jika ada penjualan karton" },
+          { error: "Harga per pack wajib diisi (lebih dari 0) jika ada penjualan pack" },
           { status: 400 }
         )
       }
 
-      if (packQty > 0 && !hargaPcs) {
+      // Validasi stok (wajib diisi, tapi boleh 0)
+      if (stockPack === undefined || stockPack === null || stockKarton === undefined || stockKarton === null) {
         return NextResponse.json(
-          { error: "Harga per pack wajib diisi jika ada penjualan pack" },
-          { status: 400 }
-        )
-      }
-
-      // Validasi stok
-      if (stockPack === undefined || stockKarton === undefined) {
-        return NextResponse.json(
-          { error: "Stok pack dan karton wajib diisi" },
+          { error: "Stok pack dan karton wajib diisi (boleh 0)" },
           { status: 400 }
         )
       }
@@ -110,10 +104,10 @@ export async function POST(request: Request) {
           spg_id: Number(spgId),
           tanggal: new Date(tanggal),
           produk_id: Number(produkId),
-          penjualan_karton: kartonQty,      // Simpan jumlah karton yang dijual
-          penjualan_pcs: packQty,           // Simpan jumlah pack yang dijual
-          harga_karton: hargaKartonValue,   // Bisa 0 jika tidak jual karton
-          harga_pcs: hargaPcsValue,         // Bisa 0 jika tidak jual pack
+          penjualan_karton: kartonQty,
+          penjualan_pcs: packQty,
+          harga_karton: hargaKartonValue,
+          harga_pcs: hargaPcsValue,
           nama_toko_transaksi: namaTokoTransaksi,
           total,
           notes: notes || null,

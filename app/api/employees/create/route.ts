@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
           nama: name, 
           email, 
           password: password,
-          role: role.toLowerCase() 
+          role: role  // ✅ FIX: Hapus .toLowerCase()
         },
       })
       userId = newUser.id
@@ -170,7 +170,7 @@ export async function PUT(req: NextRequest) {
         } = {
           nama: name,
           email: email,
-          role: role.toLowerCase(),
+          role: role,  // ✅ FIX: Hapus .toLowerCase()
         }
 
         // Add password if changing

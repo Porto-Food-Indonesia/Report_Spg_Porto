@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Upload, CheckCircle2, Lock, Users, UserCheck, UserX, XCircle, UserPlus } from "lucide-react"
+import { Plus, Edit2, Upload, CheckCircle2, Lock, Users, UserCheck, UserX, XCircle, UserPlus, Search, AlertTriangle, X } from "lucide-react"
 
 interface Employee {
   id: string
@@ -26,13 +26,16 @@ interface EmployeeManagementViewProps {
 }
 
 export default function EmployeeManagementView({ theme }: EmployeeManagementViewProps) {
-  const [showForm, setShowForm] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showPasswordModal, setShowPasswordModal] = useState<string | null>(null)
   const [showPhotoUpload, setShowPhotoUpload] = useState<string | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -52,22 +55,24 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
     newPassword: "",
   })
 
-  // Theme classes
-  const bgClass = theme === 'dark' 
+  const isDark = theme === 'dark'
+  const bgClass = isDark 
     ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900'
     : 'bg-gradient-to-br from-slate-50 via-white to-slate-100'
   
-  const cardBgClass = theme === 'dark'
+  const cardBgClass = isDark
     ? 'bg-slate-800/50 border-slate-700/50'
     : 'bg-white border-slate-200'
   
-  const textClass = theme === 'dark' ? 'text-white' : 'text-slate-900'
-  const textSecondaryClass = theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-  const inputBgClass = theme === 'dark' ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-300'
-  const hoverBgClass = theme === 'dark' ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50'
-  const tableHeaderBg = theme === 'dark' ? 'bg-slate-700/50' : 'bg-slate-100'
-  const tableRowBg = theme === 'dark' ? 'bg-slate-800/30' : 'bg-slate-50/50'
-  const borderClass = theme === 'dark' ? 'border-slate-700/50' : 'border-slate-200'
+  const textClass = isDark ? 'text-white' : 'text-slate-900'
+  const textSecondaryClass = isDark ? 'text-slate-400' : 'text-slate-600'
+  const inputBgClass = isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-300'
+  const hoverBgClass = isDark ? 'hover:bg-slate-700/30' : 'hover:bg-slate-50'
+  const tableHeaderBg = isDark ? 'bg-slate-700/50' : 'bg-slate-100'
+  const tableRowBg = isDark ? 'bg-slate-800/30' : 'bg-slate-50/50'
+  const borderClass = isDark ? 'border-slate-700/50' : 'border-slate-200'
+  const modalBg = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
+  const overlayBg = isDark ? 'bg-black/70' : 'bg-black/50'
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     const id = Date.now()
@@ -80,6 +85,22 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
   useEffect(() => {
     fetchEmployees()
   }, [])
+
+  useEffect(() => {
+    let filtered = [...employees]
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(emp => 
+        emp.name.toLowerCase().includes(query) || 
+        emp.email.toLowerCase().includes(query)
+      )
+    }
+    
+    filtered.sort((a, b) => a.name.localeCompare(b.name))
+    
+    setFilteredEmployees(filtered)
+  }, [searchQuery, employees])
 
   const fetchEmployees = async () => {
     try {
@@ -117,6 +138,12 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
       return
     }
 
+    setShowConfirmModal(true)
+  }
+
+  const handleConfirmSave = async () => {
+    setShowConfirmModal(false)
+    
     try {
       if (editingId) {
         const response = await fetch("/api/employees/create", {
@@ -167,19 +194,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
         showToast("Karyawan baru berhasil ditambahkan!", "success")
       }
       
-      setFormData({
-        name: "",
-        email: "",
-        role: "SPG",
-        status: "Aktif",
-        joinDate: new Date().toISOString().split("T")[0],
-        createAccount: false,
-        password: "",
-        changePassword: false,
-        newPassword: "",
-      })
-      setEditingId(null)
-      setShowForm(false)
+      handleCloseModal()
       await fetchEmployees()
       
     } catch (err) {
@@ -282,7 +297,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
       newPassword: "",
     })
     setEditingId(emp.id)
-    setShowForm(true)
+    setShowModal(true)
   }
 
   const handleToggleStatus = async (emp: Employee) => {
@@ -320,8 +335,8 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
     }
   }
 
-  const handleCancel = () => {
-    setShowForm(false)
+  const handleCloseModal = () => {
+    setShowModal(false)
     setEditingId(null)
     setFormData({
       name: "",
@@ -344,7 +359,6 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
     <div className={`min-h-screen ${bgClass} p-6 transition-colors duration-300`}>
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Toast Notifications */}
         <div className="fixed top-20 right-6 z-50 space-y-2">
           {toasts.map(toast => (
             <div
@@ -365,7 +379,6 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
           ))}
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className={`relative overflow-hidden ${cardBgClass} border backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group rounded-xl`}>
             <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
@@ -428,10 +441,9 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
           </div>
         </div>
 
-        {/* Password Modal */}
         {showPasswordModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className={`${cardBgClass} border rounded-xl shadow-2xl max-w-md w-full overflow-hidden`}>
+          <div className={`fixed inset-0 ${overlayBg} backdrop-blur-sm flex items-center justify-center z-50 p-4`}>
+            <div className={`${modalBg} border rounded-xl shadow-2xl max-w-md w-full overflow-hidden`}>
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500" />
               <div className="p-6">
                 <div className="flex items-center gap-3 mb-6">
@@ -498,10 +510,9 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
           </div>
         )}
 
-        {/* Photo Upload Modal */}
         {showPhotoUpload && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className={`${cardBgClass} border rounded-xl shadow-2xl max-w-md w-full overflow-hidden`}>
+          <div className={`fixed inset-0 ${overlayBg} backdrop-blur-sm flex items-center justify-center z-50 p-4`}>
+            <div className={`${modalBg} border rounded-xl shadow-2xl max-w-md w-full overflow-hidden`}>
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
               <div className="p-6">
                 <div className="flex items-center gap-3 mb-6">
@@ -533,22 +544,40 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
           </div>
         )}
 
-        {/* Form Add/Edit Employee */}
-        {showForm && (
-          <div className={`${cardBgClass} border backdrop-blur-sm shadow-xl rounded-xl overflow-hidden`}>
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <UserPlus className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className={`text-lg font-bold ${textClass}`}>{editingId ? "Edit Karyawan" : "Tambah Karyawan Baru"}</h3>
-                  <p className={`text-sm ${textSecondaryClass}`}>Lengkapi form data karyawan</p>
+        {showModal && (
+          <div 
+            className={`fixed inset-0 z-50 flex items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200 p-4`}
+            onClick={handleCloseModal}
+          >
+            <div 
+              className={`${modalBg} rounded-2xl shadow-2xl max-w-2xl w-full border-2 animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 p-6 rounded-t-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
+                      <UserPlus className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">
+                        {editingId ? 'Edit Karyawan' : 'Tambah Karyawan Baru'}
+                      </h3>
+                      <p className="text-sm text-white/80 mt-0.5">
+                        Lengkapi form data karyawan
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCloseModal}
+                    className="p-2 rounded-lg hover:bg-white/20 transition-colors"
+                  >
+                    <X className="w-5 h-5 text-white" />
+                  </button>
                 </div>
               </div>
-              
-              <div className="space-y-4">
+
+              <div className="p-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className={`text-sm font-medium ${textClass}`}>Nama Lengkap *</label>
@@ -606,7 +635,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                 </div>
 
                 {!editingId && (
-                  <div className={`${theme === 'dark' ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'} p-4 rounded-xl border`}>
+                  <div className={`${isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'} p-4 rounded-xl border`}>
                     <div className="flex items-center gap-2 mb-3">
                       <input
                         type="checkbox"
@@ -615,7 +644,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                         onChange={(e) => setFormData({ ...formData, createAccount: e.target.checked })}
                         className="w-4 h-4"
                       />
-                      <label htmlFor="createAccount" className={`font-medium text-sm ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'} cursor-pointer`}>
+                      <label htmlFor="createAccount" className={`font-medium text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'} cursor-pointer`}>
                         Buat Akun Login Untuk Karyawan Ini
                       </label>
                     </div>
@@ -630,7 +659,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                           className={`w-full px-3 py-2 ${inputBgClass} border ${textClass} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                         <p className={`text-xs ${textSecondaryClass}`}>
-                          Email login: <span className={`font-mono ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>{formData.email || '(belum diisi)'}</span>
+                          Email login: <span className={`font-mono ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>{formData.email || '(belum diisi)'}</span>
                         </p>
                       </div>
                     )}
@@ -638,7 +667,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                 )}
 
                 {editingId && (
-                  <div className={`${theme === 'dark' ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-50 border-purple-200'} p-4 rounded-xl border`}>
+                  <div className={`${isDark ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-50 border-purple-200'} p-4 rounded-xl border`}>
                     <div className="flex items-center gap-2 mb-3">
                       <input
                         type="checkbox"
@@ -647,7 +676,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                         onChange={(e) => setFormData({ ...formData, changePassword: e.target.checked, newPassword: "" })}
                         className="w-4 h-4"
                       />
-                      <label htmlFor="changePassword" className={`font-medium text-sm ${theme === 'dark' ? 'text-purple-300' : 'text-purple-700'} cursor-pointer`}>
+                      <label htmlFor="changePassword" className={`font-medium text-sm ${isDark ? 'text-purple-300' : 'text-purple-700'} cursor-pointer`}>
                         Reset Password Karyawan Ini (Admin)
                       </label>
                     </div>
@@ -669,15 +698,15 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-4">
+                <div className="flex gap-3">
                   <button
                     onClick={handleSaveEmployee}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg font-medium transition"
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition shadow-lg"
                   >
-                    {editingId ? "Update" : "Tambah"} Karyawan
+                    {editingId ? 'Update' : 'Simpan'} Karyawan
                   </button>
                   <button
-                    onClick={handleCancel}
+                    onClick={handleCloseModal}
                     className={`px-4 py-2 ${inputBgClass} border ${textClass} hover:opacity-80 rounded-lg transition`}
                   >
                     Batal
@@ -688,11 +717,67 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
           </div>
         )}
 
-        {/* Employee Table */}
-        <div className={`${cardBgClass} border backdrop-blur-sm shadow-xl rounded-xl overflow-hidden`}>
+        {showConfirmModal && (
+          <div className={`fixed inset-0 z-50 flex items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200 p-4`}>
+            <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full border-2 animate-in zoom-in duration-300`}>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg">
+                    <AlertTriangle className="w-8 h-8 text-white" />
+                  </div>
+                </div>
+                
+                <div className="text-center space-y-2">
+                  <h3 className={`text-xl font-bold ${textClass}`}>Konfirmasi {editingId ? 'Update' : 'Simpan'}</h3>
+                  <p className={`text-sm ${textSecondaryClass}`}>Pastikan data sudah benar sebelum menyimpan</p>
+                </div>
+
+                <div className={`p-4 rounded-xl ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className={textSecondaryClass}>Nama:</span>
+                      <span className={`font-semibold ${textClass} text-right`}>{formData.name}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className={textSecondaryClass}>Email:</span>
+                      <span className={`font-semibold ${textClass} text-right truncate`}>{formData.email}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className={textSecondaryClass}>Role:</span>
+                      <span className={`font-semibold ${textClass}`}>{formData.role}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className={textSecondaryClass}>Status:</span>
+                      <span className={`font-bold ${formData.status === 'Aktif' ? 'text-green-500' : 'text-red-500'}`}>
+                        {formData.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className={`flex-1 px-4 py-2 ${inputBgClass} border ${textClass} hover:opacity-80 rounded-lg transition`}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleConfirmSave}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition"
+                  >
+                    Ya, {editingId ? 'Update' : 'Simpan'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={`${cardBgClass} border backdrop-blur-sm shadow-xl rounded-xl overflow-hidden relative`}>
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
           <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                   <Users className="w-5 h-5 text-white" />
@@ -702,47 +787,41 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                   <p className={`text-sm ${textSecondaryClass}`}>Kelola semua SPG dan karyawan</p>
                 </div>
               </div>
-              {!showForm && (
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg font-medium transition shadow-lg"
-                >
-                  <Plus className="w-4 h-4" />
-                  Tambah Karyawan
-                </button>
-              )}
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg font-medium transition shadow-lg w-full sm:w-auto justify-center"
+              >
+                <Plus className="w-4 h-4" />
+                Tambah Karyawan
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Cari nama atau email karyawan..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`w-full pl-10 px-3 py-2 ${inputBgClass} border ${textClass} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
             </div>
 
             {loading ? (
               <div className="text-center py-16">
                 <div className="relative w-32 h-32 mx-auto mb-6">
                   <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 border-r-purple-500 animate-spin" />
-                  <div className="absolute inset-2 rounded-full border-4 border-transparent border-b-pink-500 border-l-cyan-500 animate-spin-slow" style={{ animationDirection: 'reverse' }} />
+                  <div className="absolute inset-2 rounded-full border-4 border-transparent border-b-pink-500 border-l-cyan-500 animate-spin-slow" />
                   <div className="absolute inset-4 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 animate-pulse" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Users className="w-12 h-12 text-white animate-bounce" />
                   </div>
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 blur-2xl opacity-50 animate-pulse" />
                 </div>
-                <div className="space-y-3">
-                  <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                    Memuat Karyawan
-                  </h3>
-                  <div className="flex items-center justify-center gap-1">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                </div>
-                <style jsx>{`
-                  @keyframes spin-slow {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                  }
-                  .animate-spin-slow {
-                    animation: spin-slow 3s linear infinite;
-                  }
-                `}</style>
+                <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  Memuat Karyawan
+                </h3>
               </div>
             ) : (
               <div className="overflow-x-auto rounded-lg">
@@ -760,8 +839,8 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                     </tr>
                   </thead>
                   <tbody>
-                    {employees.length > 0 ? (
-                      employees.map((emp, index) => (
+                    {filteredEmployees.length > 0 ? (
+                      filteredEmployees.map((emp, index) => (
                         <tr key={emp.id} className={`border-b ${borderClass} ${hoverBgClass} transition-colors ${index % 2 === 0 ? tableRowBg : ''}`}>
                           <td className="px-4 py-3">
                             {emp.profilePhoto ? (
@@ -779,7 +858,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                             <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                               emp.status === "Aktif" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" :
                               emp.status === "Cuti" ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30" :
-                              theme === 'dark' ? "bg-slate-600/50 text-slate-400 border border-slate-600/50" : "bg-slate-200 text-slate-600 border border-slate-300"
+                              isDark ? "bg-slate-600/50 text-slate-400 border border-slate-600/50" : "bg-slate-200 text-slate-600 border border-slate-300"
                             }`}>
                               {emp.status}
                             </span>
@@ -792,21 +871,21 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                                 <span className="text-xs">Aktif</span>
                               </div>
                             ) : (
-                              <span className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Belum</span>
+                              <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Belum</span>
                             )}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex gap-2 justify-center">
                               <button
                                 onClick={() => handleEditEmployee(emp)}
-                                className={`p-1.5 ${theme === 'dark' ? 'hover:bg-blue-500/20' : 'hover:bg-blue-100'} rounded transition`}
+                                className={`p-1.5 ${isDark ? 'hover:bg-blue-500/20' : 'hover:bg-blue-100'} rounded transition`}
                                 title="Edit Data"
                               >
                                 <Edit2 className="w-4 h-4 text-blue-400" />
                               </button>
                               <button
                                 onClick={() => setShowPhotoUpload(emp.id)}
-                                className={`p-1.5 ${theme === 'dark' ? 'hover:bg-emerald-500/20' : 'hover:bg-emerald-100'} rounded transition`}
+                                className={`p-1.5 ${isDark ? 'hover:bg-emerald-500/20' : 'hover:bg-emerald-100'} rounded transition`}
                                 title="Upload Foto"
                               >
                                 <Upload className="w-4 h-4 text-emerald-400" />
@@ -814,7 +893,7 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                               {emp.userId && (
                                 <button
                                   onClick={() => setShowPasswordModal(emp.userId ?? null)}
-                                  className={`p-1.5 ${theme === 'dark' ? 'hover:bg-purple-500/20' : 'hover:bg-purple-100'} rounded transition`}
+                                  className={`p-1.5 ${isDark ? 'hover:bg-purple-500/20' : 'hover:bg-purple-100'} rounded transition`}
                                   title="Ubah Password"
                                 >
                                   <Lock className="w-4 h-4 text-purple-400" />
@@ -837,8 +916,10 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
                     ) : (
                       <tr>
                         <td colSpan={8} className="px-4 py-12 text-center">
-                          <Users className={`w-16 h-16 ${theme === 'dark' ? 'text-slate-600' : 'text-slate-300'} mx-auto mb-3`} />
-                          <p className={textSecondaryClass}>Belum ada karyawan</p>
+                          <Users className={`w-16 h-16 ${isDark ? 'text-slate-600' : 'text-slate-300'} mx-auto mb-3`} />
+                          <p className={textSecondaryClass}>
+                            {searchQuery ? 'Karyawan tidak ditemukan' : 'Belum ada karyawan'}
+                          </p>
                         </td>
                       </tr>
                     )}
@@ -849,6 +930,16 @@ export default function EmployeeManagementView({ theme }: EmployeeManagementView
           </div>
         </div>
       </div>
+      
+      <style jsx>{`
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+          animation: spin-slow 3s linear infinite;
+        }
+      `}</style>
     </div>
   )
 }

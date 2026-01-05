@@ -71,12 +71,12 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     tanggal: new Date().toISOString().split("T")[0],
     produkId: "",
     jumlahKarton: "",
-    jumlahPack: "",
+    jumlahPack:  "",
     hargaPcs: "",
     hargaKarton: "",
     stockPack: "",
     stockKarton: "",
-    totalGram: "",
+    totalGram:  "",
     totalHargaCurah: "",
     namaTokoTransaksi: "",
     notes: "",
@@ -91,9 +91,9 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   }, [])
 
   useEffect(() => {
-    let filtered = products.filter(p => p.category === selectedCategory)
+    let filtered = products. filter(p => p.category === selectedCategory)
     
-    if (searchQuery.trim()) {
+    if (searchQuery. trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(p => 
         p.nama.toLowerCase().includes(query) || 
@@ -106,7 +106,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
   useEffect(() => {
     setFormData({
-      tanggal: formData.tanggal,
+      tanggal:  formData.tanggal,
       produkId: "",
       jumlahKarton: "",
       jumlahPack: "",
@@ -127,7 +127,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   useEffect(() => {
     if (showSearchModal && searchInputRef.current) {
       setTimeout(() => {
-        searchInputRef.current?.focus()
+        searchInputRef.current?. focus()
       }, 100)
     }
   }, [showSearchModal])
@@ -154,8 +154,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
   useEffect(() => {
     if (selectedCategory === "Pack/Karton") {
-      const jumlahKarton = Number(formData.jumlahKarton) || 0
-      const jumlahPack = Number(formData.jumlahPack) || 0
+      const jumlahKarton = Number(formData. jumlahKarton) || 0
+      const jumlahPack = Number(formData. jumlahPack) || 0
       const hargaKarton = Number(formData.hargaKarton) || 0
       const hargaPcs = Number(formData.hargaPcs) || 0
 
@@ -165,7 +165,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
       setTotalHarga(total)
     }
-  }, [formData.jumlahKarton, formData.jumlahPack, formData.hargaKarton, formData.hargaPcs, selectedCategory])
+  }, [formData. jumlahKarton, formData.jumlahPack, formData.hargaKarton, formData.hargaPcs, selectedCategory])
 
   const handleProductSelect = (produkId: string) => {
     const product = filteredProducts.find((p) => p.id === Number(produkId))
@@ -197,19 +197,16 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       return
     }
 
+    // WAJIB:  produk dan toko saja
     if (!formData.produkId || !formData.namaTokoTransaksi) {
       setError("Produk dan nama toko wajib diisi")
       return
     }
 
     if (selectedCategory === "Pack/Karton") {
+      // Jika ada penjualan karton, harga karton wajib diisi
       const jumlahKarton = Number(formData.jumlahKarton) || 0
       const jumlahPack = Number(formData.jumlahPack) || 0
-      
-      if (jumlahKarton === 0 && jumlahPack === 0) {
-        setError("Minimal harus ada penjualan karton atau pack")
-        return
-      }
       
       if (jumlahKarton > 0 && !formData.hargaKarton) {
         setError("Harga per karton wajib diisi jika ada penjualan karton")
@@ -220,22 +217,16 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         setError("Harga per pack wajib diisi jika ada penjualan pack")
         return
       }
-      
-      if (!formData.stockPack || !formData.stockKarton) {
-        setError("Stok pack dan karton wajib diisi")
-        return
-      }
+      // Stock bisa 0 atau kosong
     } else if (selectedCategory === "Curah") {
-      if (!formData.totalGram || !formData.totalHargaCurah) {
-        setError("Total gram dan total harga wajib diisi")
+      const totalGram = Number(formData.totalGram) || 0
+      const totalHarga = Number(formData.totalHargaCurah) || 0
+      
+      if (totalGram < 0 || totalHarga < 0) {
+        setError("Total gram dan total harga tidak boleh minus")
         return
       }
-      const totalGram = Number(formData.totalGram)
-      const totalHarga = Number(formData.totalHargaCurah)
-      if (totalGram <= 0 || totalHarga <= 0) {
-        setError("Total gram dan total harga harus lebih dari 0")
-        return
-      }
+      // Gram dan harga bisa 0 atau kosong
     }
 
     setShowConfirmModal(true)
@@ -270,8 +261,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     try {
       setSubmitting(true)
 
-      const requestBody: any = {
-        spgId: user?.id,
+      const requestBody:  any = {
+        spgId: user?. id,
         tanggal: oldFormData.tanggal,
         produkId: Number(oldFormData.produkId),
         namaTokoTransaksi: oldFormData.namaTokoTransaksi,
@@ -288,13 +279,13 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         requestBody.totalPcs = totalPcs
         requestBody.jumlahKarton = jumlahKarton
         requestBody.jumlahPack = jumlahPack
-        requestBody.hargaPcs = oldFormData.hargaPcs ? Number(oldFormData.hargaPcs) : null
-        requestBody.hargaKarton = oldFormData.hargaKarton ? Number(oldFormData.hargaKarton) : null
-        requestBody.stockPack = Number(oldFormData.stockPack)
-        requestBody.stockKarton = Number(oldFormData.stockKarton)
+        requestBody.hargaPcs = oldFormData. hargaPcs ?  Number(oldFormData.hargaPcs) : null
+        requestBody.hargaKarton = oldFormData. hargaKarton ? Number(oldFormData.hargaKarton) : null
+        requestBody.stockPack = Number(oldFormData.stockPack) || 0
+        requestBody.stockKarton = Number(oldFormData.stockKarton) || 0
       } else if (selectedCategory === "Curah") {
-        requestBody.totalGram = Number(oldFormData.totalGram)
-        requestBody.totalHargaCurah = Number(oldFormData.totalHargaCurah)
+        requestBody.totalGram = Number(oldFormData.totalGram) || 0
+        requestBody. totalHargaCurah = Number(oldFormData.totalHargaCurah) || 0
       }
 
       const response = await fetch("/api/sales/create", {
@@ -313,7 +304,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       }, 2500)
     } catch (err) {
       console.error("❌ Gagal submit:", err)
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan")
+      setError(err instanceof Error ? err.message :  "Terjadi kesalahan")
       setShowSuccessModal(false)
       setFormData(oldFormData)
       setSelectedProduct(oldProduct)
@@ -326,14 +317,10 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const maxDate = new Date().toISOString().split("T")[0]
   const isCurah = selectedCategory === "Curah"
 
-  const isCurahValid = isCurah && formData.totalGram && formData.totalHargaCurah && 
-    Number(formData.totalGram) > 0 && Number(formData.totalHargaCurah) > 0
+  // Logika tombol submit diperbarui
+  const isCurahValid = isCurah && formData.produkId && formData.namaTokoTransaksi
 
-  const isPackKartonValid = !isCurah && selectedProduct && 
-    (Number(formData.jumlahKarton) > 0 || Number(formData.jumlahPack) > 0) &&
-    formData.stockPack && formData.stockKarton &&
-    ((Number(formData.jumlahKarton) > 0 && formData.hargaKarton) || 
-     (Number(formData.jumlahPack) > 0 && formData.hargaPcs))
+  const isPackKartonValid = !isCurah && selectedProduct && formData.namaTokoTransaksi
 
   const cardBg = isDark ? "bg-slate-800/50 backdrop-blur border-slate-700" : "bg-white/80 backdrop-blur border-slate-200"
   const textClass = isDark ? "text-slate-100" : "text-slate-900"
@@ -353,7 +340,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             className={`${modalBg} rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mx-0 sm:mx-4 border-2 animate-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] sm:max-h-[80vh] flex flex-col`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`p-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} flex items-center justify-between`}>
+            <div className={`p-4 border-b ${isDark ? 'border-slate-700' :  'border-slate-200'} flex items-center justify-between`}>
               <h3 className={`text-lg font-bold ${textClass}`}>Pilih Produk</h3>
               <button
                 onClick={() => setShowSearchModal(false)}
@@ -399,7 +386,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                     >
                       <div className="flex items-start gap-3">
                         <div className={`w-10 h-10 rounded-lg ${isCurah ? 'bg-green-100 dark:bg-green-900/30' : 'bg-blue-100 dark:bg-blue-900/30'} flex items-center justify-center flex-shrink-0`}>
-                          {isCurah ? (
+                          {isCurah ?  (
                             <Weight className="w-5 h-5 text-green-600" />
                           ) : (
                             <Package className="w-5 h-5 text-blue-600" />
@@ -408,7 +395,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                         <div className="flex-1 min-w-0">
                           <p className={`font-semibold ${textClass} break-words`}>{prod.nama}</p>
                           <p className={`text-xs ${textSecondary} mt-0.5`}>SKU: {prod.sku}</p>
-                          {!isCurah && (
+                          {! isCurah && (
                             <p className={`text-xs ${textSecondary} mt-1`}>
                               {prod.pcs_per_karton} pack/karton
                             </p>
@@ -450,9 +437,9 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                     <span className={`font-semibold ${textClass} text-right truncate`}>{formData.namaTokoTransaksi}</span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span className={textSecondary}>Total:</span>
+                    <span className={textSecondary}>Total: </span>
                     <span className="font-bold text-green-500">
-                      Rp {(isCurah ? Number(formData.totalHargaCurah) : totalHarga).toLocaleString('id-ID')}
+                      Rp {(isCurah ? Number(formData.totalHargaCurah) || 0 : totalHarga).toLocaleString('id-ID')}
                     </span>
                   </div>
                 </div>
@@ -490,7 +477,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
               </div>
               
               <div className="text-center space-y-2">
-                <h3 className={`text-xl font-bold ${textClass}`}>Berhasil Disimpan! 🎉</h3>
+                <h3 className={`text-xl font-bold ${textClass}`}>Berhasil Disimpan!  🎉</h3>
                 <p className={`text-sm ${textSecondary}`}>Laporan penjualan tersimpan ke sistem</p>
               </div>
 
@@ -523,7 +510,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-red-900 dark:text-red-400">Ada kesalahan</p>
-              <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
+              <p className="text-sm text-red-700 dark: text-red-300 mt-1">{error}</p>
             </div>
           </div>
         </div>
@@ -540,7 +527,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 className={`p-4 rounded-lg border-2 transition-all ${
                   selectedCategory === "Pack/Karton"
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
+                    :  `border-slate-200 dark: border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -556,8 +543,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 onClick={() => setSelectedCategory("Curah")}
                 className={`p-4 rounded-lg border-2 transition-all ${
                   selectedCategory === "Curah"
-                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                    : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
+                    ?  'border-green-500 bg-green-50 dark:bg-green-900/20'
+                    : `border-slate-200 dark: border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -599,14 +586,14 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 className={`w-full h-10 px-3 rounded-md border ${inputBg} text-left flex items-center justify-between hover:border-blue-400 transition-colors`}
               >
                 <span className={selectedProduct ? textClass : textSecondary}>
-                  {selectedProduct ? selectedProduct.nama : "Pilih produk..."}
+                  {selectedProduct ? selectedProduct.nama :  "Pilih produk..."}
                 </span>
                 <Search className="w-4 h-4 text-slate-400" />
               </button>
             </div>
           </div>
 
-          {selectedProduct && !isCurah && (
+          {selectedProduct && ! isCurah && (
             <div className={`p-4 ${isDark ? 'bg-blue-900/20' : 'bg-blue-50'} border-l-4 border-blue-500 rounded-lg`}>
               <div className="flex items-center gap-2">
                 <Package className="w-4 h-4 text-blue-600" />
@@ -615,7 +602,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             </div>
           )}
 
-          {!isCurah && (
+          {! isCurah && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -670,7 +657,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                     type="number"
                     placeholder="Contoh: 12000"
                     value={formData.hargaPcs}
-                    onChange={(e) => setFormData({ ...formData, hargaPcs: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, hargaPcs: e. target.value })}
                     className={inputBg}
                   />
                   <p className={`text-xs ${textSecondary}`}>Wajib diisi jika jual pack</p>
@@ -693,13 +680,13 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 <div className="space-y-2">
                   <Label className={`flex items-center gap-2 ${textClass}`}>
                     <Box className="w-4 h-4 text-amber-600" />
-                    Stock Pack *
+                    Stock Pack
                   </Label>
                   <Input
                     type="number"
-                    placeholder="Stok pack yang tersisa"
+                    placeholder="Stok pack yang tersisa (boleh 0)"
                     value={formData.stockPack}
-                    onChange={(e) => setFormData({ ...formData, stockPack: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, stockPack: e.target. value })}
                     className={inputBg}
                   />
                 </div>
@@ -707,12 +694,12 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 <div className="space-y-2">
                   <Label className={`flex items-center gap-2 ${textClass}`}>
                     <Box className="w-4 h-4 text-amber-600" />
-                    Stock Karton *
+                    Stock Karton
                   </Label>
                   <Input
                     type="number"
-                    placeholder="Stok karton yang tersisa"
-                    value={formData.stockKarton}
+                    placeholder="Stok karton yang tersisa (boleh 0)"
+                    value={formData. stockKarton}
                     onChange={(e) => setFormData({ ...formData, stockKarton: e.target.value })}
                     className={inputBg}
                   />
@@ -723,11 +710,11 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 <div className={`p-4 ${isDark ? 'bg-green-900/20' : 'bg-green-50'} border-l-4 border-green-500 rounded-lg space-y-2`}>
                   <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-400">
                     <Calculator className="w-4 h-4" />
-                    <span className="font-semibold">Ringkasan Penjualan:</span>
+                    <span className="font-semibold">Ringkasan Penjualan: </span>
                   </div>
                   {Number(formData.jumlahKarton) > 0 && (
                     <p className={`text-sm ${isDark ? 'text-green-300' : 'text-green-700'}`}>
-                      Karton: {formData.jumlahKarton} × Rp {Number(formData.hargaKarton).toLocaleString("id-ID")} = 
+                      Karton:  {formData.jumlahKarton} × Rp {Number(formData.hargaKarton).toLocaleString("id-ID")} = 
                       Rp {(Number(formData.jumlahKarton) * Number(formData.hargaKarton)).toLocaleString("id-ID")}
                     </p>
                   )}
@@ -753,31 +740,31 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 <div className="space-y-2">
                   <Label className={`flex items-center gap-2 ${textClass}`}>
                     <Weight className="w-4 h-4 text-green-600" />
-                    Gram *
+                    Gram
                   </Label>
                   <Input
                     type="number"
-                    placeholder="Contoh: 500"
+                    placeholder="Contoh: 500 (boleh 0)"
                     value={formData.totalGram}
-                    onChange={(e) => setFormData({ ...formData, totalGram: e.target.value })}
+                    onChange={(e) => setFormData({ ... formData, totalGram: e.target.value })}
                     className={inputBg}
                   />
-                  <p className={`text-xs ${textSecondary}`}>Tulis jumlah gram yang terjual</p>
+                  <p className={`text-xs ${textSecondary}`}>Tulis jumlah gram yang terjual atau kosongkan jika tidak ada</p>
                 </div>
 
                 <div className="space-y-2">
                   <Label className={`flex items-center gap-2 ${textClass}`}>
                     <DollarSign className="w-4 h-4 text-green-600" />
-                    Harga *
+                    Harga
                   </Label>
                   <Input
                     type="number"
-                    placeholder="Contoh: 50000"
+                    placeholder="Contoh: 50000 (boleh 0)"
                     value={formData.totalHargaCurah}
                     onChange={(e) => setFormData({ ...formData, totalHargaCurah: e.target.value })}
                     className={inputBg}
                   />
-                  <p className={`text-xs ${textSecondary}`}>Tulis total uang yang diterima</p>
+                  <p className={`text-xs ${textSecondary}`}>Tulis total uang yang diterima atau kosongkan jika tidak ada</p>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
@@ -792,15 +779,15 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
               </div>
 
               {formData.totalGram && formData.totalHargaCurah && Number(formData.totalGram) > 0 && Number(formData.totalHargaCurah) > 0 && (
-                <div className={`p-4 ${isDark ? 'bg-green-900/20' : 'bg-green-50'} border-l-4 border-green-500 rounded-lg space-y-2`}>
+                <div className={`p-4 ${isDark ?  'bg-green-900/20' : 'bg-green-50'} border-l-4 border-green-500 rounded-lg space-y-2`}>
                   <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-400">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span className="font-semibold">Ringkasan Penjualan:</span>
+                    <span className="font-semibold">Ringkasan Penjualan: </span>
                   </div>
                   <p className={`text-sm ${isDark ? 'text-green-300' : 'text-green-700'}`}>
                     Terjual: <b>{Number(formData.totalGram).toLocaleString("id-ID")} gram</b>
                   </p>
-                  <p className={`text-lg font-bold ${isDark ? 'text-green-400' : 'text-green-900'}`}>
+                  <p className={`text-lg font-bold ${isDark ? 'text-green-400' :  'text-green-900'}`}>
                     Total: Rp {Number(formData.totalHargaCurah).toLocaleString("id-ID")}
                   </p>
                 </div>
@@ -820,7 +807,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
           <Button 
             onClick={handleSubmitClick} 
-            disabled={submitting || (!isPackKartonValid && !isCurahValid)}
+            disabled={submitting || (! isPackKartonValid && !isCurahValid)}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-6 text-base transition-all hover:scale-[1.02] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="flex items-center gap-2">
