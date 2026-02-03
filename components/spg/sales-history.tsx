@@ -23,6 +23,7 @@ interface SalesData {
   total: number
   category: string
   notes: string
+  createdAt: string  // 🆕 Field baru untuk tanggal input
 }
 
 interface SalesHistoryProps {
@@ -81,6 +82,7 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
           total: item.total || 0,
           category: item.category || "Pack/Karton",
           notes: item.notes || "",
+          createdAt: item.createdAt || item.tanggal,  // 🆕 Ambil createdAt dari API
         }))
         setSalesData(transformed)
       } else {
