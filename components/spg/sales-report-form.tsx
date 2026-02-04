@@ -41,8 +41,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
   
-  // State untuk toko
-  const [stores, setStores] = useState<string[]>([])
+  // State untuk toko - AMBIL DARI SALES DATA
+  const [availableStores, setAvailableStores] = useState<string[]>([])
   const [filteredStores, setFilteredStores] = useState<string[]>([])
   const [showStoreModal, setShowStoreModal] = useState(false)
   const [storeSearchQuery, setStoreSearchQuery] = useState("")
@@ -105,8 +105,42 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
   useEffect(() => {
     fetchProducts()
-    fetchStores()
+    loadStoresFromSalesHistory()
   }, [user])
+
+  // Fungsi untuk load daftar toko dari riwayat penjualan
+  const loadStoresFromSalesHistory = async () => {
+    try {
+      if (!user?.id) return
+      
+      // Ambil riwayat penjualan SPG ini
+      const response = await fetch(`/api/sales/list?spgId=${user.id}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      })
+      
+      const salesData = await response.json()
+      
+      if (Array.isArray(salesData)) {
+        // Extract unique store names
+        const uniqueStores = Array.from(
+          new Set(
+            salesData
+              .map((sale: any) => sale.namaTokoTransaksi || sale.toko)
+              .filter((name: string) => name && name.trim() !== "")
+          )
+        ).sort() as string[]
+        
+        setAvailableStores(uniqueStores)
+        setFilteredStores(uniqueStores)
+        console.log(`✅ Loaded ${uniqueStores.length} unique stores from sales history`)
+      }
+    } catch (err) {
+      console.error("❌ Gagal load riwayat toko:", err)
+      setAvailableStores([])
+      setFilteredStores([])
+    }
+  }
 
   useEffect(() => {
     let filtered = products.filter(p => p.category === selectedCategory)
@@ -125,11 +159,11 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   useEffect(() => {
     if (storeSearchQuery.trim()) {
       const query = storeSearchQuery.toLowerCase()
-      setFilteredStores(stores.filter(s => s.toLowerCase().includes(query)))
+      setFilteredStores(availableStores.filter(s => s.toLowerCase().includes(query)))
     } else {
-      setFilteredStores(stores)
+      setFilteredStores(availableStores)
     }
-  }, [storeSearchQuery, stores])
+  }, [storeSearchQuery, availableStores])
 
   useEffect(() => {
     setFormData({
@@ -187,39 +221,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     }
   }
 
-  const fetchStores = async () => {
-    try {
-      // Ambil daftar toko berdasarkan SPG yang login
-      // CATATAN: Sesuaikan endpoint jika Anda membuat dengan nama folder berbeda
-      // Contoh: /api/store-list atau /api/toko
-      const url = user?.id 
-        ? `/api/stores?spgId=${user.id}` 
-        : "/api/stores"
-      
-      const response = await fetch(url, {
-        cache: 'no-store', // ✅ Tidak pakai cache, selalu ambil data terbaru
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
-      })
-      const data = await response.json()
-
-      if (Array.isArray(data)) {
-        setStores(data)
-        setFilteredStores(data)
-        console.log(`✅ Loaded ${data.length} stores for SPG`)
-      } else {
-        setStores([])
-        setFilteredStores([])
-      }
-    } catch (err) {
-      console.error("❌ Gagal ambil daftar toko:", err)
-      // Jika API belum ada atau error, set empty array
-      setStores([])
-      setFilteredStores([])
-    }
-  }
-
   useEffect(() => {
     if (selectedCategory === "Pack/Karton") {
       const jumlahKarton = Number(formData.jumlahKarton) || 0
@@ -254,9 +255,9 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     if (newStoreName.trim()) {
       const trimmedName = newStoreName.trim()
       
-      // Tambahkan ke daftar stores jika belum ada
-      if (!stores.includes(trimmedName)) {
-        setStores([...stores, trimmedName])
+      // Tambahkan ke daftar availableStores jika belum ada
+      if (!availableStores.includes(trimmedName)) {
+        setAvailableStores([...availableStores, trimmedName].sort())
       }
       
       // Set sebagai toko yang dipilih
@@ -399,7 +400,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         
         // ✅ Refresh daftar toko setelah submit berhasil
         // Agar toko baru yang baru diinput langsung muncul di list
-        fetchStores()
+        loadStoresFromSalesHistory()
       }, 2500)
     } catch (err) {
       console.error("❌ Gagal submit:", err)
