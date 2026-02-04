@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
-import { Package, Calculator, AlertCircle, CheckCircle2, ShoppingBag, DollarSign, Calendar, Weight, Box, Search, AlertTriangle, X } from "lucide-react"
+import { Package, Calculator, AlertCircle, CheckCircle2, ShoppingBag, DollarSign, Calendar, Weight, Box, Search, AlertTriangle, X, Store, Plus } from "lucide-react"
 
 interface Product {
   id: number
@@ -41,12 +41,29 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
   
+  // State untuk toko
+  const [stores, setStores] = useState<string[]>([])
+  const [filteredStores, setFilteredStores] = useState<string[]>([])
+  const [showStoreModal, setShowStoreModal] = useState(false)
+  const [storeSearchQuery, setStoreSearchQuery] = useState("")
+  const [showAddStoreInput, setShowAddStoreInput] = useState(false)
+  const [newStoreName, setNewStoreName] = useState("")
+  const storeSearchInputRef = useRef<HTMLInputElement>(null)
+  
   // Handle Android back button
   useEffect(() => {
     const handleBackButton = (e: PopStateEvent) => {
       e.preventDefault()
       if (showSearchModal) {
         setShowSearchModal(false)
+        window.history.pushState(null, '', window.location.pathname)
+      } else if (showStoreModal) {
+        if (showAddStoreInput) {
+          setShowAddStoreInput(false)
+          setNewStoreName("")
+        } else {
+          setShowStoreModal(false)
+        }
         window.history.pushState(null, '', window.location.pathname)
       } else if (showConfirmModal) {
         setShowConfirmModal(false)
@@ -57,7 +74,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       }
     }
 
-    if (showSearchModal || showConfirmModal || showSuccessModal) {
+    if (showSearchModal || showStoreModal || showConfirmModal || showSuccessModal) {
       window.history.pushState(null, '', window.location.pathname)
       window.addEventListener('popstate', handleBackButton)
     }
@@ -65,18 +82,18 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     return () => {
       window.removeEventListener('popstate', handleBackButton)
     }
-  }, [showSearchModal, showConfirmModal, showSuccessModal])
+  }, [showSearchModal, showStoreModal, showConfirmModal, showSuccessModal, showAddStoreInput])
   
   const [formData, setFormData] = useState({
     tanggal: new Date().toISOString().split("T")[0],
     produkId: "",
     jumlahKarton: "",
-    jumlahPack:  "",
+    jumlahPack: "",
     hargaPcs: "",
     hargaKarton: "",
     stockPack: "",
     stockKarton: "",
-    totalGram:  "",
+    totalGram: "",
     totalHargaCurah: "",
     namaTokoTransaksi: "",
     notes: "",
@@ -88,12 +105,13 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
   useEffect(() => {
     fetchProducts()
-  }, [])
+    fetchStores()
+  }, [user])
 
   useEffect(() => {
-    let filtered = products. filter(p => p.category === selectedCategory)
+    let filtered = products.filter(p => p.category === selectedCategory)
     
-    if (searchQuery. trim()) {
+    if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(p => 
         p.nama.toLowerCase().includes(query) || 
@@ -105,8 +123,17 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   }, [selectedCategory, products, searchQuery])
 
   useEffect(() => {
+    if (storeSearchQuery.trim()) {
+      const query = storeSearchQuery.toLowerCase()
+      setFilteredStores(stores.filter(s => s.toLowerCase().includes(query)))
+    } else {
+      setFilteredStores(stores)
+    }
+  }, [storeSearchQuery, stores])
+
+  useEffect(() => {
     setFormData({
-      tanggal:  formData.tanggal,
+      tanggal: formData.tanggal,
       produkId: "",
       jumlahKarton: "",
       jumlahPack: "",
@@ -127,10 +154,18 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   useEffect(() => {
     if (showSearchModal && searchInputRef.current) {
       setTimeout(() => {
-        searchInputRef.current?. focus()
+        searchInputRef.current?.focus()
       }, 100)
     }
   }, [showSearchModal])
+
+  useEffect(() => {
+    if (showStoreModal && storeSearchInputRef.current) {
+      setTimeout(() => {
+        storeSearchInputRef.current?.focus()
+      }, 100)
+    }
+  }, [showStoreModal])
 
   const fetchProducts = async () => {
     try {
@@ -152,10 +187,43 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     }
   }
 
+  const fetchStores = async () => {
+    try {
+      // Ambil daftar toko berdasarkan SPG yang login
+      // CATATAN: Sesuaikan endpoint jika Anda membuat dengan nama folder berbeda
+      // Contoh: /api/store-list atau /api/toko
+      const url = user?.id 
+        ? `/api/stores?spgId=${user.id}` 
+        : "/api/stores"
+      
+      const response = await fetch(url, {
+        cache: 'no-store', // ✅ Tidak pakai cache, selalu ambil data terbaru
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
+      const data = await response.json()
+
+      if (Array.isArray(data)) {
+        setStores(data)
+        setFilteredStores(data)
+        console.log(`✅ Loaded ${data.length} stores for SPG`)
+      } else {
+        setStores([])
+        setFilteredStores([])
+      }
+    } catch (err) {
+      console.error("❌ Gagal ambil daftar toko:", err)
+      // Jika API belum ada atau error, set empty array
+      setStores([])
+      setFilteredStores([])
+    }
+  }
+
   useEffect(() => {
     if (selectedCategory === "Pack/Karton") {
-      const jumlahKarton = Number(formData. jumlahKarton) || 0
-      const jumlahPack = Number(formData. jumlahPack) || 0
+      const jumlahKarton = Number(formData.jumlahKarton) || 0
+      const jumlahPack = Number(formData.jumlahPack) || 0
       const hargaKarton = Number(formData.hargaKarton) || 0
       const hargaPcs = Number(formData.hargaPcs) || 0
 
@@ -165,7 +233,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
       setTotalHarga(total)
     }
-  }, [formData. jumlahKarton, formData.jumlahPack, formData.hargaKarton, formData.hargaPcs, selectedCategory])
+  }, [formData.jumlahKarton, formData.jumlahPack, formData.hargaKarton, formData.hargaPcs, selectedCategory])
 
   const handleProductSelect = (produkId: string) => {
     const product = filteredProducts.find((p) => p.id === Number(produkId))
@@ -173,6 +241,33 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     setFormData({ ...formData, produkId })
     setShowSearchModal(false)
     setSearchQuery("")
+  }
+
+  const handleStoreSelect = (storeName: string) => {
+    setFormData({ ...formData, namaTokoTransaksi: storeName })
+    setShowStoreModal(false)
+    setStoreSearchQuery("")
+    setShowAddStoreInput(false)
+  }
+
+  const handleAddNewStore = () => {
+    if (newStoreName.trim()) {
+      const trimmedName = newStoreName.trim()
+      
+      // Tambahkan ke daftar stores jika belum ada
+      if (!stores.includes(trimmedName)) {
+        setStores([...stores, trimmedName])
+      }
+      
+      // Set sebagai toko yang dipilih
+      setFormData({ ...formData, namaTokoTransaksi: trimmedName })
+      
+      // Reset dan tutup modal
+      setNewStoreName("")
+      setShowAddStoreInput(false)
+      setShowStoreModal(false)
+      setStoreSearchQuery("")
+    }
   }
 
   const handleDateChange = (newDate: string) => {
@@ -197,7 +292,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       return
     }
 
-    // WAJIB:  produk dan toko saja
+    // WAJIB: produk dan toko saja
     if (!formData.produkId || !formData.namaTokoTransaksi) {
       setError("Produk dan nama toko wajib diisi")
       return
@@ -261,8 +356,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     try {
       setSubmitting(true)
 
-      const requestBody:  any = {
-        spgId: user?. id,
+      const requestBody: any = {
+        spgId: user?.id,
         tanggal: oldFormData.tanggal,
         produkId: Number(oldFormData.produkId),
         namaTokoTransaksi: oldFormData.namaTokoTransaksi,
@@ -279,13 +374,13 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         requestBody.totalPcs = totalPcs
         requestBody.jumlahKarton = jumlahKarton
         requestBody.jumlahPack = jumlahPack
-        requestBody.hargaPcs = oldFormData. hargaPcs ?  Number(oldFormData.hargaPcs) : null
-        requestBody.hargaKarton = oldFormData. hargaKarton ? Number(oldFormData.hargaKarton) : null
+        requestBody.hargaPcs = oldFormData.hargaPcs ? Number(oldFormData.hargaPcs) : null
+        requestBody.hargaKarton = oldFormData.hargaKarton ? Number(oldFormData.hargaKarton) : null
         requestBody.stockPack = Number(oldFormData.stockPack) || 0
         requestBody.stockKarton = Number(oldFormData.stockKarton) || 0
       } else if (selectedCategory === "Curah") {
         requestBody.totalGram = Number(oldFormData.totalGram) || 0
-        requestBody. totalHargaCurah = Number(oldFormData.totalHargaCurah) || 0
+        requestBody.totalHargaCurah = Number(oldFormData.totalHargaCurah) || 0
       }
 
       const response = await fetch("/api/sales/create", {
@@ -301,10 +396,14 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
       setTimeout(() => {
         setShowSuccessModal(false)
+        
+        // ✅ Refresh daftar toko setelah submit berhasil
+        // Agar toko baru yang baru diinput langsung muncul di list
+        fetchStores()
       }, 2500)
     } catch (err) {
       console.error("❌ Gagal submit:", err)
-      setError(err instanceof Error ? err.message :  "Terjadi kesalahan")
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan")
       setShowSuccessModal(false)
       setFormData(oldFormData)
       setSelectedProduct(oldProduct)
@@ -319,7 +418,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
   // Logika tombol submit diperbarui
   const isCurahValid = isCurah && formData.produkId && formData.namaTokoTransaksi
-
   const isPackKartonValid = !isCurah && selectedProduct && formData.namaTokoTransaksi
 
   const cardBg = isDark ? "bg-slate-800/50 backdrop-blur border-slate-700" : "bg-white/80 backdrop-blur border-slate-200"
@@ -331,6 +429,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
   return (
     <div className="max-w-4xl mx-auto px-2 sm:px-4 pb-6">
+      {/* Modal Pilih Produk */}
       {showSearchModal && (
         <div 
           className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}
@@ -340,7 +439,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             className={`${modalBg} rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mx-0 sm:mx-4 border-2 animate-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] sm:max-h-[80vh] flex flex-col`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`p-4 border-b ${isDark ? 'border-slate-700' :  'border-slate-200'} flex items-center justify-between`}>
+            <div className={`p-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} flex items-center justify-between`}>
               <h3 className={`text-lg font-bold ${textClass}`}>Pilih Produk</h3>
               <button
                 onClick={() => setShowSearchModal(false)}
@@ -386,7 +485,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                     >
                       <div className="flex items-start gap-3">
                         <div className={`w-10 h-10 rounded-lg ${isCurah ? 'bg-green-100 dark:bg-green-900/30' : 'bg-blue-100 dark:bg-blue-900/30'} flex items-center justify-center flex-shrink-0`}>
-                          {isCurah ?  (
+                          {isCurah ? (
                             <Weight className="w-5 h-5 text-green-600" />
                           ) : (
                             <Package className="w-5 h-5 text-blue-600" />
@@ -395,7 +494,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                         <div className="flex-1 min-w-0">
                           <p className={`font-semibold ${textClass} break-words`}>{prod.nama}</p>
                           <p className={`text-xs ${textSecondary} mt-0.5`}>SKU: {prod.sku}</p>
-                          {! isCurah && (
+                          {!isCurah && (
                             <p className={`text-xs ${textSecondary} mt-1`}>
                               {prod.pcs_per_karton} pack/karton
                             </p>
@@ -411,6 +510,143 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         </div>
       )}
 
+      {/* Modal Pilih/Tambah Toko */}
+      {showStoreModal && (
+        <div 
+          className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}
+          onClick={() => {
+            setShowStoreModal(false)
+            setShowAddStoreInput(false)
+            setNewStoreName("")
+          }}
+        >
+          <div 
+            className={`${modalBg} rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mx-0 sm:mx-4 border-2 animate-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] sm:max-h-[80vh] flex flex-col`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`p-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} flex items-center justify-between`}>
+              <h3 className={`text-lg font-bold ${textClass}`}>
+                {showAddStoreInput ? "Tambah Toko Baru" : "Pilih Nama Toko"}
+              </h3>
+              <button
+                onClick={() => {
+                  if (showAddStoreInput) {
+                    setShowAddStoreInput(false)
+                    setNewStoreName("")
+                  } else {
+                    setShowStoreModal(false)
+                  }
+                }}
+                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!showAddStoreInput ? (
+              <>
+                <div className="p-4 space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      ref={storeSearchInputRef}
+                      type="text"
+                      placeholder="Cari nama toko..."
+                      value={storeSearchQuery}
+                      onChange={(e) => setStoreSearchQuery(e.target.value)}
+                      className={`w-full pl-10 h-11 px-3 py-2 text-sm border ${inputBg} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                  </div>
+
+                  <Button
+                    onClick={() => setShowAddStoreInput(true)}
+                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Tambah Toko Baru
+                  </Button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 pb-4">
+                  {filteredStores.length === 0 ? (
+                    <div className={`p-8 text-center ${textSecondary}`}>
+                      <Store className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">
+                        {storeSearchQuery ? "Toko tidak ditemukan" : "Belum ada toko"}
+                      </p>
+                      <p className="text-xs mt-2">Klik tombol "Tambah Toko Baru" di atas</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredStores.map((store, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleStoreSelect(store)}
+                          className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                            formData.namaTokoTransaksi === store
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                              : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0`}>
+                              <Store className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-semibold ${textClass} break-words`}>{store}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="p-4 space-y-4">
+                <div className="space-y-2">
+                  <Label className={textClass}>Nama Toko Baru</Label>
+                  <Input
+                    autoFocus
+                    type="text"
+                    placeholder="Contoh: Toko Sejahtera"
+                    value={newStoreName}
+                    onChange={(e) => setNewStoreName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newStoreName.trim()) {
+                        handleAddNewStore()
+                      }
+                    }}
+                    className={inputBg}
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => {
+                      setShowAddStoreInput(false)
+                      setNewStoreName("")
+                    }}
+                    variant="outline"
+                    className={`flex-1 ${isDark ? 'bg-slate-700 hover:bg-slate-600 border-slate-600' : 'bg-white hover:bg-slate-50'}`}
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    onClick={handleAddNewStore}
+                    disabled={!newStoreName.trim()}
+                    className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+                  >
+                    Tambah
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi */}
       {showConfirmModal && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200 p-4`}>
           <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full border-2 animate-in zoom-in duration-300`}>
@@ -437,7 +673,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                     <span className={`font-semibold ${textClass} text-right truncate`}>{formData.namaTokoTransaksi}</span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span className={textSecondary}>Total: </span>
+                    <span className={textSecondary}>Total:</span>
                     <span className="font-bold text-green-500">
                       Rp {(isCurah ? Number(formData.totalHargaCurah) || 0 : totalHarga).toLocaleString('id-ID')}
                     </span>
@@ -466,6 +702,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         </div>
       )}
 
+      {/* Modal Sukses */}
       {showSuccessModal && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200 p-4`}>
           <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full border-2 animate-in zoom-in duration-300`}>
@@ -477,7 +714,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
               </div>
               
               <div className="text-center space-y-2">
-                <h3 className={`text-xl font-bold ${textClass}`}>Berhasil Disimpan!  🎉</h3>
+                <h3 className={`text-xl font-bold ${textClass}`}>Berhasil Disimpan! 🎉</h3>
                 <p className={`text-sm ${textSecondary}`}>Laporan penjualan tersimpan ke sistem</p>
               </div>
 
@@ -510,7 +747,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-red-900 dark:text-red-400">Ada kesalahan</p>
-              <p className="text-sm text-red-700 dark: text-red-300 mt-1">{error}</p>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
             </div>
           </div>
         </div>
@@ -527,7 +764,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 className={`p-4 rounded-lg border-2 transition-all ${
                   selectedCategory === "Pack/Karton"
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    :  `border-slate-200 dark: border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
+                    : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -543,8 +780,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 onClick={() => setSelectedCategory("Curah")}
                 className={`p-4 rounded-lg border-2 transition-all ${
                   selectedCategory === "Curah"
-                    ?  'border-green-500 bg-green-50 dark:bg-green-900/20'
-                    : `border-slate-200 dark: border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
+                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                    : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'}`
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -586,14 +823,14 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 className={`w-full h-10 px-3 rounded-md border ${inputBg} text-left flex items-center justify-between hover:border-blue-400 transition-colors`}
               >
                 <span className={selectedProduct ? textClass : textSecondary}>
-                  {selectedProduct ? selectedProduct.nama :  "Pilih produk..."}
+                  {selectedProduct ? selectedProduct.nama : "Pilih produk..."}
                 </span>
                 <Search className="w-4 h-4 text-slate-400" />
               </button>
             </div>
           </div>
 
-          {selectedProduct && ! isCurah && (
+          {selectedProduct && !isCurah && (
             <div className={`p-4 ${isDark ? 'bg-blue-900/20' : 'bg-blue-50'} border-l-4 border-blue-500 rounded-lg`}>
               <div className="flex items-center gap-2">
                 <Package className="w-4 h-4 text-blue-600" />
@@ -602,7 +839,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             </div>
           )}
 
-          {! isCurah && (
+          {!isCurah && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -657,20 +894,28 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                     type="number"
                     placeholder="Contoh: 12000"
                     value={formData.hargaPcs}
-                    onChange={(e) => setFormData({ ...formData, hargaPcs: e. target.value })}
+                    onChange={(e) => setFormData({ ...formData, hargaPcs: e.target.value })}
                     className={inputBg}
                   />
                   <p className={`text-xs ${textSecondary}`}>Wajib diisi jika jual pack</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className={textClass}>Nama Toko *</Label>
-                  <Input
-                    placeholder="Contoh: Toko Sejahtera"
-                    value={formData.namaTokoTransaksi}
-                    onChange={(e) => setFormData({ ...formData, namaTokoTransaksi: e.target.value })}
-                    className={inputBg}
-                  />
+                  <Label className={`flex items-center gap-2 text-sm font-medium ${textClass}`}>
+                    <Store className="w-4 h-4 text-purple-600" />
+                    Nama Toko *
+                  </Label>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowStoreModal(true)}
+                    className={`w-full h-10 px-3 rounded-md border ${inputBg} text-left flex items-center justify-between hover:border-purple-400 transition-colors`}
+                  >
+                    <span className={formData.namaTokoTransaksi ? textClass : textSecondary}>
+                      {formData.namaTokoTransaksi || "Pilih atau tambah toko..."}
+                    </span>
+                    <Search className="w-4 h-4 text-slate-400" />
+                  </button>
                 </div>
 
                 <div className="space-y-2">
@@ -686,7 +931,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                     type="number"
                     placeholder="Stok pack yang tersisa (boleh 0)"
                     value={formData.stockPack}
-                    onChange={(e) => setFormData({ ...formData, stockPack: e.target. value })}
+                    onChange={(e) => setFormData({ ...formData, stockPack: e.target.value })}
                     className={inputBg}
                   />
                 </div>
@@ -699,7 +944,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                   <Input
                     type="number"
                     placeholder="Stok karton yang tersisa (boleh 0)"
-                    value={formData. stockKarton}
+                    value={formData.stockKarton}
                     onChange={(e) => setFormData({ ...formData, stockKarton: e.target.value })}
                     className={inputBg}
                   />
@@ -710,11 +955,11 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 <div className={`p-4 ${isDark ? 'bg-green-900/20' : 'bg-green-50'} border-l-4 border-green-500 rounded-lg space-y-2`}>
                   <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-400">
                     <Calculator className="w-4 h-4" />
-                    <span className="font-semibold">Ringkasan Penjualan: </span>
+                    <span className="font-semibold">Ringkasan Penjualan:</span>
                   </div>
                   {Number(formData.jumlahKarton) > 0 && (
                     <p className={`text-sm ${isDark ? 'text-green-300' : 'text-green-700'}`}>
-                      Karton:  {formData.jumlahKarton} × Rp {Number(formData.hargaKarton).toLocaleString("id-ID")} = 
+                      Karton: {formData.jumlahKarton} × Rp {Number(formData.hargaKarton).toLocaleString("id-ID")} = 
                       Rp {(Number(formData.jumlahKarton) * Number(formData.hargaKarton)).toLocaleString("id-ID")}
                     </p>
                   )}
@@ -746,7 +991,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                     type="number"
                     placeholder="Contoh: 500 (boleh 0)"
                     value={formData.totalGram}
-                    onChange={(e) => setFormData({ ... formData, totalGram: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, totalGram: e.target.value })}
                     className={inputBg}
                   />
                   <p className={`text-xs ${textSecondary}`}>Tulis jumlah gram yang terjual atau kosongkan jika tidak ada</p>
@@ -768,26 +1013,34 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label className={textClass}>Nama Toko *</Label>
-                  <Input
-                    placeholder="Contoh: Warung Bu Lastri"
-                    value={formData.namaTokoTransaksi}
-                    onChange={(e) => setFormData({ ...formData, namaTokoTransaksi: e.target.value })}
-                    className={inputBg}
-                  />
+                  <Label className={`flex items-center gap-2 text-sm font-medium ${textClass}`}>
+                    <Store className="w-4 h-4 text-purple-600" />
+                    Nama Toko *
+                  </Label>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowStoreModal(true)}
+                    className={`w-full h-10 px-3 rounded-md border ${inputBg} text-left flex items-center justify-between hover:border-purple-400 transition-colors`}
+                  >
+                    <span className={formData.namaTokoTransaksi ? textClass : textSecondary}>
+                      {formData.namaTokoTransaksi || "Pilih atau tambah toko..."}
+                    </span>
+                    <Search className="w-4 h-4 text-slate-400" />
+                  </button>
                 </div>
               </div>
 
               {formData.totalGram && formData.totalHargaCurah && Number(formData.totalGram) > 0 && Number(formData.totalHargaCurah) > 0 && (
-                <div className={`p-4 ${isDark ?  'bg-green-900/20' : 'bg-green-50'} border-l-4 border-green-500 rounded-lg space-y-2`}>
+                <div className={`p-4 ${isDark ? 'bg-green-900/20' : 'bg-green-50'} border-l-4 border-green-500 rounded-lg space-y-2`}>
                   <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-400">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span className="font-semibold">Ringkasan Penjualan: </span>
+                    <span className="font-semibold">Ringkasan Penjualan:</span>
                   </div>
                   <p className={`text-sm ${isDark ? 'text-green-300' : 'text-green-700'}`}>
                     Terjual: <b>{Number(formData.totalGram).toLocaleString("id-ID")} gram</b>
                   </p>
-                  <p className={`text-lg font-bold ${isDark ? 'text-green-400' :  'text-green-900'}`}>
+                  <p className={`text-lg font-bold ${isDark ? 'text-green-400' : 'text-green-900'}`}>
                     Total: Rp {Number(formData.totalHargaCurah).toLocaleString("id-ID")}
                   </p>
                 </div>
@@ -807,7 +1060,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
           <Button 
             onClick={handleSubmitClick} 
-            disabled={submitting || (! isPackKartonValid && !isCurahValid)}
+            disabled={submitting || (!isPackKartonValid && !isCurahValid)}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-6 text-base transition-all hover:scale-[1.02] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="flex items-center gap-2">
