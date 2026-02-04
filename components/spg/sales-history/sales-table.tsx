@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Edit2, X, Save, AlertCircle, BarChart3, CheckCircle2 } from "lucide-react"
+import { Loader2, Edit2, X, Save, AlertCircle, BarChart3, CheckCircle2, Store, Search } from "lucide-react"
 
 interface SalesData {
   id: string
@@ -56,6 +56,11 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
   const [notifMessage, setNotifMessage] = useState("")
   const [filterToko, setFilterToko] = useState<string>("semua")
   const [filterProduk, setFilterProduk] = useState<string>("semua")
+  
+  // State untuk modal pilih toko saat edit
+  const [showStoreSelectModal, setShowStoreSelectModal] = useState(false)
+  const [storeSearchQuery, setStoreSearchQuery] = useState("")
+  const storeSearchRef = useRef<HTMLInputElement>(null)
 
   // Theme classes
   const classes = {
@@ -69,6 +74,22 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
     modalBg: isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
     overlayBg: isDark ? "bg-black/70" : "bg-black/50",
   }
+
+  // Extract unique store names dari salesData
+  const uniqueToko = Array.from(new Set(salesData.map(s => s.namaTokoTransaksi))).sort()
+  const uniqueProduk = Array.from(new Set(salesData.map(s => s.produk))).sort()
+  
+  // Filter stores untuk modal select
+  const filteredStores = uniqueToko.filter(store => 
+    store.toLowerCase().includes(storeSearchQuery.toLowerCase())
+  )
+
+  // Focus search input when modal opens
+  useEffect(() => {
+    if (showStoreSelectModal && storeSearchRef.current) {
+      setTimeout(() => storeSearchRef.current?.focus(), 100)
+    }
+  }, [showStoreSelectModal])
 
   // Check if can edit based on createdAt
   const canEdit = (createdAt: string): boolean => {
@@ -104,6 +125,12 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
     setEditingId(null)
     setEditResult(null)
     setLocalError("")
+  }
+
+  const handleStoreSelect = (storeName: string) => {
+    setEditForm({ ...editForm, namaTokoTransaksi: storeName })
+    setShowStoreSelectModal(false)
+    setStoreSearchQuery("")
   }
 
   // Preview calculation
@@ -194,9 +221,6 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
   }
 
   const displayError = error || localError
-  const uniqueToko = Array.from(new Set(salesData.map(s => s.namaTokoTransaksi))).sort()
-  const uniqueProduk = Array.from(new Set(salesData.map(s => s.produk))).sort()
-
   const filteredData = salesData.filter(row => {
     const matchToko = filterToko === "semua" || row.namaTokoTransaksi === filterToko
     const matchProduk = filterProduk === "semua" || row.produk === filterProduk
@@ -230,7 +254,24 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
       <FormInput label="Harga/Pack" type="number" field="hargaPcs" placeholder={`Sekarang: ${row.hargaPcs}`} />
       <FormInput label="Stock Pack" type="number" field="stockPack" placeholder={`Sekarang: ${row.stockPack}`} />
       <FormInput label="Stock Karton" type="number" field="stockKarton" placeholder={`Sekarang: ${row.stockKarton}`} />
-      <FormInput label="Nama Toko" field="namaTokoTransaksi" placeholder={`Sekarang: ${row.namaTokoTransaksi}`} />
+      
+      {/* Nama Toko dengan Button Select */}
+      <div>
+        <Label className={`text-xs ${classes.text} mb-1.5 block`}>
+          Nama Toko <span className="text-slate-400">(opsional)</span>
+        </Label>
+        <button
+          type="button"
+          onClick={() => setShowStoreSelectModal(true)}
+          className={`w-full h-9 px-3 rounded-md border ${classes.inputBg} text-left flex items-center justify-between hover:border-purple-400 transition-colors text-sm`}
+        >
+          <span className={editForm.namaTokoTransaksi || row.namaTokoTransaksi ? classes.text : classes.textSecondary}>
+            {editForm.namaTokoTransaksi || `Sekarang: ${row.namaTokoTransaksi}`}
+          </span>
+          <Store className="w-4 h-4 text-slate-400" />
+        </button>
+      </div>
+      
       <FormInput label="Catatan" field="notes" placeholder="Tambahkan catatan..." />
     </div>
   )
@@ -295,6 +336,83 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
 
   return (
     <>
+      {/* Modal Pilih Toko Saat Edit */}
+      {showStoreSelectModal && (
+        <div 
+          className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${classes.overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}
+          onClick={() => {
+            setShowStoreSelectModal(false)
+            setStoreSearchQuery("")
+          }}
+        >
+          <div 
+            className={`${classes.modalBg} rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mx-0 sm:mx-4 border-2 animate-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] sm:max-h-[80vh] flex flex-col`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`p-4 border-b ${classes.border} flex items-center justify-between`}>
+              <h3 className={`text-lg font-bold ${classes.text}`}>Pilih Nama Toko</h3>
+              <button
+                onClick={() => {
+                  setShowStoreSelectModal(false)
+                  setStoreSearchQuery("")
+                }}
+                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  ref={storeSearchRef}
+                  type="text"
+                  placeholder="Cari nama toko..."
+                  value={storeSearchQuery}
+                  onChange={(e) => setStoreSearchQuery(e.target.value)}
+                  className={`w-full pl-10 h-11 px-3 py-2 text-sm border ${classes.inputBg} rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {filteredStores.length === 0 ? (
+                <div className={`p-8 text-center ${classes.textSecondary}`}>
+                  <Store className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">
+                    {storeSearchQuery ? "Toko tidak ditemukan" : "Belum ada riwayat toko"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredStores.map((store, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleStoreSelect(store)}
+                      className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                        editForm.namaTokoTransaksi === store
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                          : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0`}>
+                          <Store className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold ${classes.text} break-words`}>{store}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Success Modal */}
       {showSuccessModal && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center ${classes.overlayBg} backdrop-blur-sm p-4`}>
