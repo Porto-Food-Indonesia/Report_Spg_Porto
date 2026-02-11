@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
-import { Package, Calculator, AlertCircle, CheckCircle2, ShoppingBag, DollarSign, Calendar, Weight, Box, Search, AlertTriangle, X, Store, Plus } from "lucide-react"
+import { Package, Calculator, AlertCircle, CheckCircle2, ShoppingBag, DollarSign, Calendar, Weight, Box, Search, AlertTriangle, X, Store, Plus, Edit2, Save } from "lucide-react"
 
 interface Product {
   id: number
@@ -48,6 +48,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const [storeSearchQuery, setStoreSearchQuery] = useState("")
   const [showAddStoreInput, setShowAddStoreInput] = useState(false)
   const [newStoreName, setNewStoreName] = useState("")
+  const [editingStore, setEditingStore] = useState<string | null>(null)
+  const [editedStoreName, setEditedStoreName] = useState("")
   const storeSearchInputRef = useRef<HTMLInputElement>(null)
   
   // Handle Android back button
@@ -58,7 +60,10 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         setShowSearchModal(false)
         window.history.pushState(null, '', window.location.pathname)
       } else if (showStoreModal) {
-        if (showAddStoreInput) {
+        if (editingStore) {
+          setEditingStore(null)
+          setEditedStoreName("")
+        } else if (showAddStoreInput) {
           setShowAddStoreInput(false)
           setNewStoreName("")
         } else {
@@ -82,7 +87,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     return () => {
       window.removeEventListener('popstate', handleBackButton)
     }
-  }, [showSearchModal, showStoreModal, showConfirmModal, showSuccessModal, showAddStoreInput])
+  }, [showSearchModal, showStoreModal, showConfirmModal, showSuccessModal, showAddStoreInput, editingStore])
   
   const [formData, setFormData] = useState({
     tanggal: new Date().toISOString().split("T")[0],
@@ -249,6 +254,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     setShowStoreModal(false)
     setStoreSearchQuery("")
     setShowAddStoreInput(false)
+    setEditingStore(null)
+    setEditedStoreName("")
   }
 
   const handleAddNewStore = () => {
@@ -268,6 +275,39 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       setShowAddStoreInput(false)
       setShowStoreModal(false)
       setStoreSearchQuery("")
+    }
+  }
+
+  const handleEditStore = (oldName: string) => {
+    setEditingStore(oldName)
+    setEditedStoreName(oldName)
+  }
+
+  const handleSaveEditStore = () => {
+    if (editedStoreName.trim() && editingStore) {
+      const trimmedNewName = editedStoreName.trim()
+      
+      // Cek apakah nama baru sudah ada di list (kecuali nama yang sedang diedit)
+      if (trimmedNewName !== editingStore && availableStores.includes(trimmedNewName)) {
+        alert("Nama toko sudah ada di daftar!")
+        return
+      }
+      
+      // Update daftar toko
+      const updatedStores = availableStores.map(store => 
+        store === editingStore ? trimmedNewName : store
+      ).sort()
+      
+      setAvailableStores(updatedStores)
+      
+      // Jika toko yang diedit adalah toko yang sedang dipilih di form, update juga
+      if (formData.namaTokoTransaksi === editingStore) {
+        setFormData({ ...formData, namaTokoTransaksi: trimmedNewName })
+      }
+      
+      // Reset edit mode
+      setEditingStore(null)
+      setEditedStoreName("")
     }
   }
 
@@ -511,7 +551,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         </div>
       )}
 
-      {/* Modal Pilih/Tambah Toko */}
+      {/* Modal Pilih/Tambah/Edit Toko */}
       {showStoreModal && (
         <div 
           className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}
@@ -519,6 +559,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
             setShowStoreModal(false)
             setShowAddStoreInput(false)
             setNewStoreName("")
+            setEditingStore(null)
+            setEditedStoreName("")
           }}
         >
           <div 
@@ -534,6 +576,9 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                   if (showAddStoreInput) {
                     setShowAddStoreInput(false)
                     setNewStoreName("")
+                  } else if (editingStore) {
+                    setEditingStore(null)
+                    setEditedStoreName("")
                   } else {
                     setShowStoreModal(false)
                   }
@@ -580,24 +625,81 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                   ) : (
                     <div className="space-y-2">
                       {filteredStores.map((store, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleStoreSelect(store)}
-                          className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
-                            formData.namaTokoTransaksi === store
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                              : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className={`w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0`}>
-                              <Store className="w-5 h-5 text-purple-600" />
+                        <div key={index}>
+                          {editingStore === store ? (
+                            <div className={`p-4 rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 space-y-3`}>
+                              <Input
+                                autoFocus
+                                type="text"
+                                value={editedStoreName}
+                                onChange={(e) => setEditedStoreName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && editedStoreName.trim()) {
+                                    handleSaveEditStore()
+                                  } else if (e.key === 'Escape') {
+                                    setEditingStore(null)
+                                    setEditedStoreName("")
+                                  }
+                                }}
+                                className={inputBg}
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => {
+                                    setEditingStore(null)
+                                    setEditedStoreName("")
+                                  }}
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1"
+                                >
+                                  Batal
+                                </Button>
+                                <Button
+                                  onClick={handleSaveEditStore}
+                                  disabled={!editedStoreName.trim()}
+                                  size="sm"
+                                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+                                >
+                                  <Save className="w-3 h-3 mr-1" />
+                                  Simpan
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`font-semibold ${textClass} break-words`}>{store}</p>
+                          ) : (
+                            <div
+                              className={`p-4 rounded-lg border-2 transition-all ${
+                                formData.namaTokoTransaksi === store
+                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                  : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <button
+                                  onClick={() => handleStoreSelect(store)}
+                                  className="flex-1 flex items-start gap-3 text-left"
+                                >
+                                  <div className={`w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0`}>
+                                    <Store className="w-5 h-5 text-purple-600" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`font-semibold ${textClass} break-words`}>{store}</p>
+                                  </div>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleEditStore(store)
+                                  }}
+                                  className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors flex-shrink-0"
+                                  title="Edit nama toko"
+                                >
+                                  <Edit2 className="w-4 h-4 text-blue-600" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
