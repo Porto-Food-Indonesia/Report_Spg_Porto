@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
-import { Package, Calculator, AlertCircle, CheckCircle2, ShoppingBag, DollarSign, Calendar, Weight, Box, Search, AlertTriangle, X, Store, Plus, Edit2, Save } from "lucide-react"
+import { Package, Calculator, AlertCircle, CheckCircle2, ShoppingBag, DollarSign, Calendar, Weight, Box, Search, AlertTriangle, X, Store, Plus, Edit2, Save, Trash2 } from "lucide-react"
 
 interface Product {
   id: number
@@ -308,6 +308,22 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       // Reset edit mode
       setEditingStore(null)
       setEditedStoreName("")
+    }
+  }
+
+  const handleDeleteStore = (storeName: string) => {
+    // Konfirmasi delete
+    if (!confirm(`Hapus "${storeName}" dari daftar?\n\nCatatan: Riwayat penjualan lama tidak akan terhapus.`)) {
+      return
+    }
+    
+    // Hapus dari daftar
+    const updatedStores = availableStores.filter(store => store !== storeName)
+    setAvailableStores(updatedStores)
+    
+    // Jika toko yang dihapus sedang dipilih di form, kosongkan
+    if (formData.namaTokoTransaksi === storeName) {
+      setFormData({ ...formData, namaTokoTransaksi: "" })
     }
   }
 
@@ -686,16 +702,28 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
                                     <p className={`font-semibold ${textClass} break-words`}>{store}</p>
                                   </div>
                                 </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleEditStore(store)
-                                  }}
-                                  className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors flex-shrink-0"
-                                  title="Edit nama toko"
-                                >
-                                  <Edit2 className="w-4 h-4 text-blue-600" />
-                                </button>
+                                <div className="flex gap-1 flex-shrink-0">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleEditStore(store)
+                                    }}
+                                    className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                    title="Edit nama toko"
+                                  >
+                                    <Edit2 className="w-4 h-4 text-blue-600" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDeleteStore(store)
+                                    }}
+                                    className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                    title="Hapus toko dari daftar"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-red-600" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           )}
