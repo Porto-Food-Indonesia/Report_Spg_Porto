@@ -283,7 +283,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     setEditedStoreName(oldName)
   }
 
-  const handleSaveEditStore = () => {
+  const handleSaveEditStore = async () => {
     if (editedStoreName.trim() && editingStore) {
       const trimmedNewName = editedStoreName.trim()
       
@@ -292,38 +292,101 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         alert("Nama toko sudah ada di daftar!")
         return
       }
-      
-      // Update daftar toko
-      const updatedStores = availableStores.map(store => 
-        store === editingStore ? trimmedNewName : store
-      ).sort()
-      
-      setAvailableStores(updatedStores)
-      
-      // Jika toko yang diedit adalah toko yang sedang dipilih di form, update juga
-      if (formData.namaTokoTransaksi === editingStore) {
-        setFormData({ ...formData, namaTokoTransaksi: trimmedNewName })
+
+      // Konfirmasi ke user
+      const confirm = window.confirm(
+        `Edit nama toko dari "${editingStore}" ke "${trimmedNewName}"?\n\n` +
+        `⚠️ SEMUA riwayat penjualan dengan nama "${editingStore}" akan ikut berubah menjadi "${trimmedNewName}"`
+      )
+
+      if (!confirm) return
+
+      try {
+        // Call API untuk update di database
+        const response = await fetch("/api/stores/update", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            oldName: editingStore,
+            newName: trimmedNewName,
+            spgId: user?.id,
+          }),
+        })
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(result.error || "Gagal update nama toko")
+        }
+
+        console.log(`✅ Updated ${result.updatedCount} sales records`)
+        alert(`✅ Berhasil! ${result.updatedCount} data penjualan telah diupdate`)
+
+        // Update daftar toko di state
+        const updatedStores = availableStores.map(store => 
+          store === editingStore ? trimmedNewName : store
+        ).sort()
+        
+        setAvailableStores(updatedStores)
+        
+        // Jika toko yang diedit adalah toko yang sedang dipilih di form, update juga
+        if (formData.namaTokoTransaksi === editingStore) {
+          setFormData({ ...formData, namaTokoTransaksi: trimmedNewName })
+        }
+        
+        // Reset edit mode
+        setEditingStore(null)
+        setEditedStoreName("")
+
+      } catch (err) {
+        console.error("❌ Error updating store:", err)
+        alert(`❌ Gagal update: ${err instanceof Error ? err.message : "Terjadi kesalahan"}`)
       }
-      
-      // Reset edit mode
-      setEditingStore(null)
-      setEditedStoreName("")
     }
   }
 
-  const handleDeleteStore = (storeName: string) => {
-    // Konfirmasi delete
-    if (!confirm(`Hapus "${storeName}" dari daftar?\n\nCatatan: Riwayat penjualan lama tidak akan terhapus.`)) {
-      return
-    }
+  const handleDeleteStore = async (storeName: string) => {
+    // Konfirmasi delete dengan warning
+    const confirm = window.confirm(
+      `⚠️ PERINGATAN!\n\n` +
+      `Hapus toko "${storeName}" dari sistem?\n\n` +
+      `SEMUA riwayat penjualan dengan nama toko ini akan DIHAPUS PERMANEN!\n\n` +
+      `Apakah Anda yakin?`
+    )
     
-    // Hapus dari daftar
-    const updatedStores = availableStores.filter(store => store !== storeName)
-    setAvailableStores(updatedStores)
-    
-    // Jika toko yang dihapus sedang dipilih di form, kosongkan
-    if (formData.namaTokoTransaksi === storeName) {
-      setFormData({ ...formData, namaTokoTransaksi: "" })
+    if (!confirm) return
+
+    try {
+      // Call API untuk delete
+      const response = await fetch(
+        `/api/stores/update?storeName=${encodeURIComponent(storeName)}&spgId=${user?.id}`,
+        { method: "DELETE" }
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Gagal hapus toko")
+      }
+
+      console.log(`✅ Deleted ${result.deletedCount} sales records`)
+      alert(`✅ Berhasil! Toko "${storeName}" dan ${result.deletedCount} data penjualan telah dihapus`)
+
+      // Hapus dari daftar
+      const updatedStores = availableStores.filter(store => store !== storeName)
+      setAvailableStores(updatedStores)
+      
+      // Jika toko yang dihapus sedang dipilih di form, kosongkan
+      if (formData.namaTokoTransaksi === storeName) {
+        setFormData({ ...formData, namaTokoTransaksi: "" })
+      }
+
+      // Reload data toko untuk sinkronisasi
+      await loadStoresFromSalesHistory()
+
+    } catch (err) {
+      console.error("❌ Error deleting store:", err)
+      alert(`❌ Gagal hapus: ${err instanceof Error ? err.message : "Terjadi kesalahan"}`)
     }
   }
 
