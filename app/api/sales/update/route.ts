@@ -8,7 +8,8 @@ export async function PUT(request: NextRequest) {
 
     const {
       id,
-      penjualanKarton,    // ✅ TAMBAH: Accept karton langsung
+      tanggal,             // ✅ TAMBAH: Edit tanggal transaksi
+      penjualanKarton,     // ✅ TAMBAH: Accept karton langsung
       penjualanPcs,        // ✅ TAMBAH: Accept pcs langsung
       totalPcs,            // ✅ KEEP: Backward compatibility
       hargaPcs,
@@ -37,7 +38,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Data penjualan tidak ditemukan" }, { status: 404 });
     }
 
-    // 2. Cek apakah masih bisa edit (H+2)
+    // 2. Cek apakah masih bisa edit (H+7) ✅ CHANGED
     const salesDate = new Date(existingSale.tanggal);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -46,9 +47,9 @@ export async function PUT(request: NextRequest) {
     const diffTime = today.getTime() - salesDate.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    if (diffDays > 2) {
+    if (diffDays > 7) { // ✅ CHANGED: 2 → 7
       return NextResponse.json(
-        { error: "Laporan hanya bisa diedit maksimal 2 hari setelah tanggal transaksi" },
+        { error: "Laporan hanya bisa diedit maksimal 7 hari setelah tanggal transaksi" },
         { status: 403 }
       );
     }
@@ -56,6 +57,34 @@ export async function PUT(request: NextRequest) {
     // 3. Prepare update data untuk tabel penjualan
     const updateData: any = {};
     let needRecalcTotal = false;
+
+    // ✅ Handle tanggal transaksi
+    if (tanggal !== undefined && tanggal !== null && tanggal !== '') {
+      const newDate = new Date(tanggal);
+      const todayCheck = new Date();
+      todayCheck.setHours(0, 0, 0, 0);
+      newDate.setHours(0, 0, 0, 0);
+      
+      // Validasi: tidak boleh masa depan
+      if (newDate > todayCheck) {
+        return NextResponse.json(
+          { error: "Tanggal tidak boleh lebih dari hari ini" },
+          { status: 400 }
+        );
+      }
+      
+      // Validasi: tidak boleh lebih dari 7 hari yang lalu ✅ CHANGED
+      const diffNewDate = Math.ceil((todayCheck.getTime() - newDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffNewDate > 7) { // ✅ CHANGED: 2 → 7
+        return NextResponse.json(
+          { error: "Tanggal tidak boleh lebih dari 7 hari yang lalu" },
+          { status: 400 }
+        );
+      }
+      
+      updateData.tanggal = newDate;
+      console.log('📅 Update tanggal:', newDate.toISOString());
+    }
 
     // ✅ PRIORITAS 1: Handle penjualanKarton dan penjualanPcs secara terpisah
     if (penjualanKarton !== undefined && penjualanKarton !== null && penjualanKarton !== '') {

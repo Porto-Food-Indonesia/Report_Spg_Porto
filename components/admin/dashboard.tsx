@@ -8,8 +8,9 @@ import AnalyticsView from "@/components/admin/analytics-view"
 import SalesReportView from "@/components/admin/sales-report-view"
 import ProductManagementView from "@/components/admin/product-management-view"
 import EmployeeManagementView from "@/components/admin/employee-management-view"
+import MasterTokoSection from "./master-toko-section"
 
-type ViewType = "analytics" | "laporan" | "produk" | "karyawan"
+type ViewType = "analytics" | "laporan" | "produk" | "karyawan" | "toko"
 type Theme = "dark" | "light"
 
 interface Notification {
@@ -171,6 +172,7 @@ export default function AdminDashboard() {
             {currentView === "laporan" && <SalesReportView theme={theme} />}
             {currentView === "produk" && <ProductManagementView theme={theme} />}
             {currentView === "karyawan" && <EmployeeManagementView theme={theme} />}
+            {currentView === "toko" && <MasterTokoSection theme={theme} />}
           </main>
         </div>
       </div>

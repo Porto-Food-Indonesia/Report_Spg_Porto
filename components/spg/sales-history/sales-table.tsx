@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Edit2, X, Save, AlertCircle, BarChart3, CheckCircle2, Store, Search } from "lucide-react"
+import { Loader2, Edit2, X, Save, AlertCircle, BarChart3, CheckCircle2, Store, Search, Calendar } from "lucide-react"
 
 interface SalesData {
   id: string
@@ -35,10 +35,40 @@ interface SalesTableProps {
   onRefresh: () => void
 }
 
+// ✅ FIX: FormInput dipindah ke LUAR component SalesTable
+interface FormInputProps {
+  label: string
+  type?: string
+  field: string
+  placeholder: string
+  max?: string
+  editForm: Record<string, string>
+  setEditForm: (form: Record<string, string>) => void
+  inputBg: string
+  textClass: string
+}
+
+const FormInput = ({ label, type = "text", field, placeholder, max, editForm, setEditForm, inputBg, textClass }: FormInputProps) => (
+  <div>
+    <Label className={`text-xs ${textClass}`}>
+      {label} <span className="text-slate-400">(opsional)</span>
+    </Label>
+    <Input
+      type={type}
+      value={editForm[field]}
+      onChange={(e) => setEditForm({ ...editForm, [field]: e.target.value })}
+      placeholder={placeholder}
+      max={max}
+      className={`h-9 text-sm ${inputBg}`}
+    />
+  </div>
+)
+
 export default function SalesTable({ salesData, loading, error, theme, onRefresh }: SalesTableProps) {
   const isDark = theme === 'dark'
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<Record<string, string>>({
+    tanggal: "",
     penjualanKarton: "",
     penjualanPcs: "",
     hargaKarton: "",
@@ -57,12 +87,12 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
   const [filterToko, setFilterToko] = useState<string>("semua")
   const [filterProduk, setFilterProduk] = useState<string>("semua")
   
-  // State untuk modal pilih toko saat edit
   const [showStoreSelectModal, setShowStoreSelectModal] = useState(false)
   const [storeSearchQuery, setStoreSearchQuery] = useState("")
+  const [masterStores, setMasterStores] = useState<string[]>([])
+  const [loadingStores, setLoadingStores] = useState(false)
   const storeSearchRef = useRef<HTMLInputElement>(null)
 
-  // Theme classes
   const classes = {
     cardBg: isDark ? "bg-slate-800/50 backdrop-blur border-slate-700" : "bg-white/80 backdrop-blur border-slate-200",
     text: isDark ? "text-slate-100" : "text-slate-900",
@@ -75,39 +105,71 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
     overlayBg: isDark ? "bg-black/70" : "bg-black/50",
   }
 
-  // Extract unique store names dari salesData
   const uniqueToko = Array.from(new Set(salesData.map(s => s.namaTokoTransaksi))).sort()
   const uniqueProduk = Array.from(new Set(salesData.map(s => s.produk))).sort()
   
-  // Filter stores untuk modal select
-  const filteredStores = uniqueToko.filter(store => 
+  const filteredStores = masterStores.filter(store => 
     store.toLowerCase().includes(storeSearchQuery.toLowerCase())
   )
 
-  // Focus search input when modal opens
+  const loadMasterStores = async () => {
+    try {
+      setLoadingStores(true)
+      const response = await fetch("/api/toko?status=Aktif", {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      })
+      const result = await response.json()
+      
+      if (result.success && Array.isArray(result.data)) {
+        const storeNames = result.data.map((toko: any) => toko.nama).sort()
+        setMasterStores(storeNames)
+      }
+    } catch (err) {
+      console.error("❌ Gagal load master toko:", err)
+    } finally {
+      setLoadingStores(false)
+    }
+  }
+
+  useEffect(() => {
+    if (showStoreSelectModal && masterStores.length === 0) {
+      loadMasterStores()
+    }
+  }, [showStoreSelectModal])
+
   useEffect(() => {
     if (showStoreSelectModal && storeSearchRef.current) {
       setTimeout(() => storeSearchRef.current?.focus(), 100)
     }
   }, [showStoreSelectModal])
 
-  // Check if can edit based on createdAt
   const canEdit = (createdAt: string): boolean => {
     const inputDate = new Date(createdAt)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     inputDate.setHours(0, 0, 0, 0)
     const diffDays = Math.ceil((today.getTime() - inputDate.getTime()) / (1000 * 60 * 60 * 24))
-    return diffDays <= 2
+    return diffDays <= 7
+  }
+
+  const validateDate = (dateString: string): boolean => {
+    const selectedDate = new Date(dateString)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    selectedDate.setHours(0, 0, 0, 0)
+    const diffDays = Math.ceil((today.getTime() - selectedDate.getTime()) / (1000 * 60 * 60 * 24))
+    return diffDays <= 7 && diffDays >= 0
   }
 
   const handleEdit = (row: SalesData) => {
     if (!canEdit(row.createdAt)) {
-      setLocalError("Laporan hanya bisa diedit maksimal 2 hari setelah tanggal input")
+      setLocalError("Laporan hanya bisa diedit maksimal 7 hari setelah tanggal input")
       return
     }
     setEditingId(row.id)
     setEditForm({
+      tanggal: "",
       penjualanKarton: "",
       penjualanPcs: "",
       hargaKarton: "",
@@ -133,7 +195,6 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
     setStoreSearchQuery("")
   }
 
-  // Preview calculation
   useEffect(() => {
     if (editingId) {
       const row = salesData.find(r => r.id === editingId)
@@ -157,6 +218,15 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
       setLocalError("")
       
       const payload: any = { id: editingId }
+      
+      if (editForm.tanggal !== '') {
+        if (!validateDate(editForm.tanggal)) {
+          setLocalError("Tanggal tidak valid. Maksimal 7 hari yang lalu dan tidak boleh tanggal masa depan.")
+          setSaving(false)
+          return
+        }
+        payload.tanggal = editForm.tanggal
+      }
       
       if (editForm.penjualanKarton !== '') {
         const val = Number(editForm.penjualanKarton)
@@ -229,55 +299,8 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
 
   const latestStock = filteredData.length > 0 ? filteredData[0] : null
 
-  // Input Field Component
-  const FormInput = ({ label, type = "text", field, placeholder }: any) => (
-    <div>
-      <Label className={`text-xs ${classes.text}`}>
-        {label} <span className="text-slate-400">(opsional)</span>
-      </Label>
-      <Input
-        type={type}
-        value={editForm[field as keyof typeof editForm]}
-        onChange={(e) => setEditForm({ ...editForm, [field]: e.target.value })}
-        placeholder={placeholder}
-        className={`h-9 text-sm ${classes.inputBg}`}
-      />
-    </div>
-  )
-
-  // Edit Form Fields
-  const EditFields = ({ row }: { row: SalesData }) => (
-    <div className="space-y-3">
-      <FormInput label="Penjualan Karton" type="number" field="penjualanKarton" placeholder={`Sekarang: ${row.penjualanKarton}`} />
-      <FormInput label="Penjualan Pack" type="number" field="penjualanPcs" placeholder={`Sekarang: ${row.penjualanPcs}`} />
-      <FormInput label="Harga/Karton" type="number" field="hargaKarton" placeholder={`Sekarang: ${row.hargaKarton}`} />
-      <FormInput label="Harga/Pack" type="number" field="hargaPcs" placeholder={`Sekarang: ${row.hargaPcs}`} />
-      <FormInput label="Stock Pack" type="number" field="stockPack" placeholder={`Sekarang: ${row.stockPack}`} />
-      <FormInput label="Stock Karton" type="number" field="stockKarton" placeholder={`Sekarang: ${row.stockKarton}`} />
-      
-      {/* Nama Toko dengan Button Select */}
-      <div>
-        <Label className={`text-xs ${classes.text} mb-1.5 block`}>
-          Nama Toko <span className="text-slate-400">(opsional)</span>
-        </Label>
-        <button
-          type="button"
-          onClick={() => setShowStoreSelectModal(true)}
-          className={`w-full h-9 px-3 rounded-md border ${classes.inputBg} text-left flex items-center justify-between hover:border-purple-400 transition-colors text-sm`}
-        >
-          <span className={editForm.namaTokoTransaksi || row.namaTokoTransaksi ? classes.text : classes.textSecondary}>
-            {editForm.namaTokoTransaksi || `Sekarang: ${row.namaTokoTransaksi}`}
-          </span>
-          <Store className="w-4 h-4 text-slate-400" />
-        </button>
-      </div>
-      
-      <FormInput label="Catatan" field="notes" placeholder="Tambahkan catatan..." />
-    </div>
-  )
-
-  // Data Display Component
-  const DataDisplay = ({ row }: { row: SalesData }) => (
+  // ✅ FIX: DataDisplay dipindah ke LUAR juga agar tidak re-render
+  const renderDataDisplay = (row: SalesData) => (
     <>
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
@@ -334,16 +357,90 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
     </>
   )
 
+  // ✅ FIX: EditFields juga dijadikan render function bukan component
+  const renderEditFields = (row: SalesData) => {
+    const today = new Date()
+    const maxDate = today.toISOString().split('T')[0]
+    const minDateObj = new Date(today)
+    minDateObj.setDate(minDateObj.getDate() - 7)
+    const minDate = minDateObj.toISOString().split('T')[0]
+    
+    const currentDateFormatted = new Date(row.tanggal).toLocaleDateString("id-ID", { 
+      weekday: 'long',
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    })
+    
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label className={`text-xs ${classes.text} mb-1.5 block`}>
+            📅 Tanggal Transaksi <span className="text-slate-400">(opsional)</span>
+          </Label>
+          <div className="relative">
+            <input
+              type="date"
+              value={editForm.tanggal}
+              onChange={(e) => setEditForm({ ...editForm, tanggal: e.target.value })}
+              min={minDate}
+              max={maxDate}
+              className={`w-full h-9 px-3 pr-10 text-sm rounded-md border ${classes.inputBg} ${classes.text} cursor-pointer
+                [&::-webkit-calendar-picker-indicator]:cursor-pointer
+                [&::-webkit-calendar-picker-indicator]:opacity-0
+                [&::-webkit-calendar-picker-indicator]:absolute
+                [&::-webkit-calendar-picker-indicator]:w-full
+                [&::-webkit-calendar-picker-indicator]:h-full
+                [&::-webkit-calendar-picker-indicator]:left-0
+                [&::-webkit-calendar-picker-indicator]:top-0
+              `}
+            />
+            <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+          <div className={`flex items-center gap-2 mt-1.5 text-xs ${classes.textSecondary}`}>
+            <span>Sekarang: <strong className={classes.text}>{currentDateFormatted}</strong></span>
+          </div>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            Maksimal 7 hari yang lalu
+          </p>
+        </div>
+        
+        <FormInput label="Penjualan Karton" type="number" field="penjualanKarton" placeholder={`Sekarang: ${row.penjualanKarton}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
+        <FormInput label="Penjualan Pack" type="number" field="penjualanPcs" placeholder={`Sekarang: ${row.penjualanPcs}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
+        <FormInput label="Harga/Karton" type="number" field="hargaKarton" placeholder={`Sekarang: ${row.hargaKarton}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
+        <FormInput label="Harga/Pack" type="number" field="hargaPcs" placeholder={`Sekarang: ${row.hargaPcs}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
+        <FormInput label="Stock Pack" type="number" field="stockPack" placeholder={`Sekarang: ${row.stockPack}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
+        <FormInput label="Stock Karton" type="number" field="stockKarton" placeholder={`Sekarang: ${row.stockKarton}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
+        
+        <div>
+          <Label className={`text-xs ${classes.text} mb-1.5 block`}>
+            🏪 Nama Toko <span className="text-slate-400">(opsional)</span>
+          </Label>
+          <button
+            type="button"
+            onClick={() => setShowStoreSelectModal(true)}
+            className={`w-full h-9 px-3 rounded-md border ${classes.inputBg} text-left flex items-center justify-between hover:border-purple-400 transition-colors text-sm`}
+          >
+            <span className={editForm.namaTokoTransaksi || row.namaTokoTransaksi ? classes.text : classes.textSecondary}>
+              {editForm.namaTokoTransaksi || `Sekarang: ${row.namaTokoTransaksi}`}
+            </span>
+            <Store className="w-4 h-4 text-slate-400" />
+          </button>
+        </div>
+        
+        <FormInput label="Catatan" field="notes" placeholder="Tambahkan catatan..." editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
+      </div>
+    )
+  }
+
   return (
     <>
-      {/* Modal Pilih Toko Saat Edit */}
+      {/* Modal Pilih Toko */}
       {showStoreSelectModal && (
         <div 
           className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${classes.overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}
-          onClick={() => {
-            setShowStoreSelectModal(false)
-            setStoreSearchQuery("")
-          }}
+          onClick={() => { setShowStoreSelectModal(false); setStoreSearchQuery("") }}
         >
           <div 
             className={`${classes.modalBg} rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mx-0 sm:mx-4 border-2 animate-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] sm:max-h-[80vh] flex flex-col`}
@@ -351,13 +448,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
           >
             <div className={`p-4 border-b ${classes.border} flex items-center justify-between`}>
               <h3 className={`text-lg font-bold ${classes.text}`}>Pilih Nama Toko</h3>
-              <button
-                onClick={() => {
-                  setShowStoreSelectModal(false)
-                  setStoreSearchQuery("")
-                }}
-                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-              >
+              <button onClick={() => { setShowStoreSelectModal(false); setStoreSearchQuery("") }} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -377,12 +468,15 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 pb-4">
-              {filteredStores.length === 0 ? (
+              {loadingStores ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                </div>
+              ) : filteredStores.length === 0 ? (
                 <div className={`p-8 text-center ${classes.textSecondary}`}>
                   <Store className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p className="text-sm">
-                    {storeSearchQuery ? "Toko tidak ditemukan" : "Belum ada riwayat toko"}
-                  </p>
+                  <p className="text-sm">{storeSearchQuery ? "Toko tidak ditemukan" : "Belum ada toko di master"}</p>
+                  <p className="text-xs mt-2">Hubungi admin untuk menambahkan toko</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -397,7 +491,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={`w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0`}>
+                        <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
                           <Store className="w-5 h-5 text-purple-600" />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -463,7 +557,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
           <CardTitle className={classes.text}>Riwayat Transaksi</CardTitle>
           <CardDescription className={classes.textSecondary}>
             📝 Semua riwayat penjualan Anda dalam 30 hari terakhir<br />
-            <span className="text-blue-500 font-medium">✏️ Bisa edit transaksi maksimal 2 hari setelah tanggal input</span>
+            <span className="text-blue-500 font-medium">✏️ Bisa edit transaksi maksimal 7 hari setelah tanggal input</span>
             {salesData.length > 0 && <span className="ml-2 text-sm font-medium text-blue-600">• {filteredData.length} dari {salesData.length} transaksi</span>}
           </CardDescription>
         </CardHeader>
@@ -494,7 +588,6 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
               </div>
             </div>
 
-            {/* Stock Info */}
             {(filterToko !== "semua" || filterProduk !== "semua") && latestStock && latestStock.category !== "Curah" && (
               <div className={`mt-3 p-3 rounded-lg border ${classes.border} ${isDark ? 'bg-slate-700' : 'bg-white'}`}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mb-2">
@@ -517,7 +610,6 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
               </div>
             )}
 
-            {/* Reset Filter */}
             {(filterToko !== "semua" || filterProduk !== "semua") && (
               <Button size="sm" variant="outline" onClick={() => { setFilterToko("semua"); setFilterProduk("semua") }} className={`w-full h-9 text-xs ${isDark ? 'border-slate-600 hover:bg-slate-700' : ''}`}>
                 🔄 Reset Filter
@@ -551,7 +643,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
                   <div key={row.id} className={`${classes.cardBg} rounded-lg p-4 border ${classes.border}`}>
                     {editingId === row.id ? (
                       <div className={`space-y-3 ${isDark ? 'bg-blue-900/20' : 'bg-blue-50'} p-3 rounded-lg -m-4`}>
-                        <EditFields row={row} />
+                        {renderEditFields(row)}
                         
                         {editResult && (
                           <div className={`text-xs ${isDark ? 'bg-slate-700' : 'bg-white'} p-3 rounded-lg ${classes.border} border`}>
@@ -577,7 +669,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
                         <p className={`text-xs ${classes.textSecondary} italic text-center`}>💡 Isi hanya field yang ingin diubah, sisanya kosongkan</p>
                       </div>
                     ) : (
-                      <DataDisplay row={row} />
+                      renderDataDisplay(row)
                     )}
                   </div>
                 ))}

@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { BarChart3, FileText, Package, Users, Menu, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { BarChart3, FileText, Package, Users, Menu, X, ChevronLeft, ChevronRight, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface AdminSidebarProps {
   currentView: string
-  onViewChange: (view: "analytics" | "laporan" | "produk" | "karyawan") => void
+  onViewChange: (view: "analytics" | "laporan" | "produk" | "karyawan" | "toko") => void
   theme?: 'dark' | 'light'
 }
 
@@ -61,9 +61,16 @@ export default function AdminSidebar({ currentView, onViewChange, theme = 'dark'
       description: "Kelola Tim",
       color: "from-orange-500 to-red-500"
     },
+    { 
+      id: "toko", 
+      label: "Master Toko", 
+      icon: Store,
+      description: "Kelola Data Toko",
+      color: "from-yellow-500 to-amber-500"
+    },
   ]
 
-  const handleMenuClick = (view: "analytics" | "laporan" | "produk" | "karyawan") => {
+  const handleMenuClick = (view: "analytics" | "laporan" | "produk" | "karyawan" | "toko") => {
     onViewChange(view)
     if (window.innerWidth < 1024) {
       setIsMobileOpen(false)
@@ -151,7 +158,7 @@ export default function AdminSidebar({ currentView, onViewChange, theme = 'dark'
             return (
               <div key={item.id} className="relative group">
                 <Button
-                  onClick={() => handleMenuClick(item.id as "analytics" | "laporan" | "produk" | "karyawan")}
+                  onClick={() => handleMenuClick(item.id as "analytics" | "laporan" | "produk" | "karyawan" | "toko")}
                   onMouseEnter={() => setHoveredItem(item.id)}
                   onMouseLeave={() => setHoveredItem(null)}
                   className={`

@@ -85,8 +85,21 @@ model employees {
   join_date   DateTime?
   created_at  DateTime  @default(now())
   foto_profil String?   @db.Text
+  daftar_toko Json?     // ← TAMBAHKAN BARIS INI
   user_id     Int?      @unique
   user        users?    @relation("UserToEmployee", fields: [user_id], references: [id])
 
   @@index([user_id])
+}
+
+model toko {
+  id         Int      @id @default(autoincrement())
+  nama       String   @unique @db.VarChar(255)
+  alamat     String?  @db.Text
+  kontak     String?  @db.VarChar(100)
+  status     String   @default("Aktif") @db.VarChar(50)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([status])
 }

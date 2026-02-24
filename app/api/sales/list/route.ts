@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server"
 import { getAllSalesReports } from "@/lib/db-utils"
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "@/lib/prisma"
 
-const prisma = new PrismaClient()
+// ⭐ DISABLE CACHE
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET(request: Request) {
   try {
@@ -15,7 +17,6 @@ export async function GET(request: Request) {
 
     console.log("📊 Received params:", { spgId, startDate, endDate })
 
-    // ⚡ Pastikan await dan catch error
     let allReports
     try {
       allReports = await getAllSalesReports()
@@ -28,11 +29,15 @@ export async function GET(request: Request) {
       console.error("❌ Database error in getAllSalesReports:", dbError)
       return NextResponse.json([], { 
         status: 200,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        }
       })
     }
 
-    // ✅ Validasi adalah array
     if (!Array.isArray(allReports)) {
       console.error(
         "❌ getAllSalesReports tidak return array:",
@@ -40,14 +45,17 @@ export async function GET(request: Request) {
       )
       return NextResponse.json([], { 
         status: 200,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        }
       })
     }
 
     let reports = allReports
-    console.log(
-      `✅ Found ${reports.length} sales records from database`
-    )
+    console.log(`✅ Found ${reports.length} sales records from database`)
 
     // 🔍 Filter SPG
     if (spgId && spgId !== "semua") {
@@ -59,20 +67,14 @@ export async function GET(request: Request) {
         const match = reportSpgId === spgId
 
         if (!match) {
-          console.log(
-            `  ❌ No match: "${reportSpgId}" !== "${spgId}"`
-          )
+          console.log(`  ❌ No match: "${reportSpgId}" !== "${spgId}"`)
         } else {
-          console.log(
-            `  ✅ Match found: "${reportSpgId}" === "${spgId}"`
-          )
+          console.log(`  ✅ Match found: "${reportSpgId}" === "${spgId}"`)
         }
         return match
       })
       
-      console.log(
-        `🔍 SPG Filter: ${beforeCount} → ${reports.length} records`
-      )
+      console.log(`🔍 SPG Filter: ${beforeCount} → ${reports.length} records`)
     }
 
     // 📅 Filter tanggal transaksi
@@ -87,9 +89,7 @@ export async function GET(request: Request) {
         return date >= start && date <= end
       })
 
-      console.log(
-        `📅 Date Filter: ${beforeCount} → ${reports.length} records`
-      )
+      console.log(`📅 Date Filter: ${beforeCount} → ${reports.length} records`)
     }
 
     // 🔥 AMBIL DATA STOK SPG UNTUK SETIAP PRODUK
@@ -106,7 +106,6 @@ export async function GET(request: Request) {
           }
         })
         
-        // Map stok by produk_id untuk akses cepat
         stokRecords.forEach(stok => {
           stokData[stok.produk_id] = {
             stokKarton: Number(stok.stok_karton || 0),
@@ -121,13 +120,12 @@ export async function GET(request: Request) {
       }
     }
 
-    // ✅ TRANSFORM DATA (FULL + FIELD CURAH & PACK/KARTON + STOK)
+    // ✅ TRANSFORM DATA
     const transformed = reports.map((r) => {
       const produkCategory = r.produk?.category || "Pack/Karton"
       const isCurah = produkCategory === "Curah"
       const produkId = r.produk_id
       
-      // Ambil stok untuk produk ini
       const stok = stokData[produkId] || {
         stokKarton: 0,
         stokPcs: 0,
@@ -136,52 +134,32 @@ export async function GET(request: Request) {
       
       return {
         id: String(r.id),
-
-        // 🟢 TANGGAL INPUT (UNTUK EXCEL)
-        created_at: r.created_at
-          ? r.created_at.toISOString()
-          : null,
-
-        // 🟢 TANGGAL TRANSAKSI
-        tanggal: r.tanggal
-          ? r.tanggal.toISOString()
-          : null,
-
+        created_at: r.created_at ? r.created_at.toISOString() : null,
+        tanggal: r.tanggal ? r.tanggal.toISOString() : null,
         spgId: String(r.spg_id),
         spgNama: r.user?.nama || "UNKNOWN",
-
         produk: r.produk?.nama || "UNKNOWN",
         produkId: String(produkId),
         produkPcsPerKarton: r.produk?.pcs_per_karton || 1,
-        category: produkCategory, // ✅ Field 'category' untuk component
-
-        // 🟦 DATA PACK/KARTON (untuk produk non-curah)
+        category: produkCategory,
+        isCurah,
         penjualanKarton: Number(r.penjualan_karton || 0),
         penjualanPcs: Number(r.penjualan_pcs || 0),
         hargaKarton: Number(r.harga_karton || 0),
         hargaPcs: Number(r.harga_pcs || 0),
-
-        // 🟩 DATA CURAH (untuk produk curah)
         penjualanGram: Number(r.penjualan_gram || 0),
-
-        // 📦 DATA STOK - Gunakan nama field yang sama dengan component
-        stockPack: stok.stokPcs,      // Component expect 'stockPack'
-        stockKarton: stok.stokKarton, // Component expect 'stockKarton'
-        stokGram: stok.stokGram,      // Untuk curah
-
-        // 💰 TOTAL
+        hargaPerGram: Number(r.harga_per_gram || 0),
+        stockPack: stok.stokPcs,
+        stockKarton: stok.stokKarton,
+        stokGram: stok.stokGram,
         total: Number(r.total || 0),
-        
-        // 🏪 TOKO & NOTES
         namaTokoTransaksi: r.nama_toko_transaksi || "UNKNOWN",
         toko: r.nama_toko_transaksi || "UNKNOWN",
         notes: r.notes || "",
       }
     })
 
-    console.log(
-      `✅ Returning ${transformed.length} transformed records`
-    )
+    console.log(`✅ Returning ${transformed.length} transformed records`)
     console.log(
       `📊 Sample data (first record):`,
       transformed[0] ? JSON.stringify(transformed[0], null, 2) : "No data"
@@ -189,7 +167,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json(transformed, {
       status: 200,
-      headers: { "Content-Type": "application/json" }
+      headers: { 
+        "Content-Type": "application/json",
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
     })
     
   } catch (error) {
@@ -201,9 +184,12 @@ export async function GET(request: Request) {
     
     return NextResponse.json([], {
       status: 200,
-      headers: { "Content-Type": "application/json" }
+      headers: { 
+        "Content-Type": "application/json",
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
     })
-  } finally {
-    await prisma.$disconnect()
   }
 }

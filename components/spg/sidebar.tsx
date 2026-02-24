@@ -172,10 +172,13 @@ export default function SPGSidebar({
               : "bg-slate-50 border border-slate-200"
             }
           `}>
-            <p className={`text-xs font-medium ${textClass}`}>SPG Report v1.0</p>
-            <p className={`text-[10px] ${textSecondaryClass} mt-1`}>
-              © 2025 Porto System
-            </p>
+            <p className={`text-xs font-medium ${textClass}`}>SPG Report</p>
+              <p className={`text-[10px] ${textSecondaryClass} mt-1`}>
+               © 2026 Fadillah
+              </p>
+            <p className={`text-[10px] ${textSecondaryClass}`}>
+            Universitas Nusaputra
+              </p>
           </div>
         </div>
       </aside>

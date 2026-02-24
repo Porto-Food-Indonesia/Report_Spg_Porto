@@ -2,6 +2,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 
+// ⭐ DISABLE CACHE - Agar data analytics selalu fresh
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(request: NextRequest) {
   try {
     const now = new Date()
@@ -164,7 +168,14 @@ export async function GET(request: NextRequest) {
       salesTrend,
     }
 
-    return NextResponse.json(analytics)
+    // ⭐ Return dengan cache headers
+    return NextResponse.json(analytics, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    })
   } catch (error) {
     console.error('Error fetching analytics:', error)
     return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })

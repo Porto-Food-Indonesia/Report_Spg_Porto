@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "@/lib/prisma"
 
-const prisma = new PrismaClient()
+// ⭐ DISABLE CACHE
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET() {
   try {
@@ -11,14 +13,18 @@ export async function GET() {
       orderBy: { id: "asc" },
     })
     
-    return NextResponse.json(products)
+    return NextResponse.json(products, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    })
   } catch (error) {
     console.error("[GET /products/list] Error:", error)
     return NextResponse.json(
       { error: "Gagal mengambil produk" },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }

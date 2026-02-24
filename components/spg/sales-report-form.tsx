@@ -46,10 +46,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
   const [filteredStores, setFilteredStores] = useState<string[]>([])
   const [showStoreModal, setShowStoreModal] = useState(false)
   const [storeSearchQuery, setStoreSearchQuery] = useState("")
-  const [showAddStoreInput, setShowAddStoreInput] = useState(false)
-  const [newStoreName, setNewStoreName] = useState("")
-  const [editingStore, setEditingStore] = useState<string | null>(null)
-  const [editedStoreName, setEditedStoreName] = useState("")
   const storeSearchInputRef = useRef<HTMLInputElement>(null)
   
   // Handle Android back button
@@ -60,15 +56,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         setShowSearchModal(false)
         window.history.pushState(null, '', window.location.pathname)
       } else if (showStoreModal) {
-        if (editingStore) {
-          setEditingStore(null)
-          setEditedStoreName("")
-        } else if (showAddStoreInput) {
-          setShowAddStoreInput(false)
-          setNewStoreName("")
-        } else {
-          setShowStoreModal(false)
-        }
+        setShowStoreModal(false)
         window.history.pushState(null, '', window.location.pathname)
       } else if (showConfirmModal) {
         setShowConfirmModal(false)
@@ -87,7 +75,7 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     return () => {
       window.removeEventListener('popstate', handleBackButton)
     }
-  }, [showSearchModal, showStoreModal, showConfirmModal, showSuccessModal, showAddStoreInput, editingStore])
+  }, [showSearchModal, showStoreModal, showConfirmModal, showSuccessModal])
   
   const [formData, setFormData] = useState({
     tanggal: new Date().toISOString().split("T")[0],
@@ -110,38 +98,31 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
 
   useEffect(() => {
     fetchProducts()
-    loadStoresFromSalesHistory()
+    loadStoresFromMaster()
   }, [user])
 
-  // Fungsi untuk load daftar toko dari riwayat penjualan
-  const loadStoresFromSalesHistory = async () => {
+  // Fungsi untuk load daftar toko dari MASTER TOKO
+  const loadStoresFromMaster = async () => {
     try {
-      if (!user?.id) return
-      
-      // Ambil riwayat penjualan SPG ini
-      const response = await fetch(`/api/sales/list?spgId=${user.id}`, {
+      // Ambil master toko dari API (hanya yang aktif)
+      const response = await fetch(`/api/toko?status=Aktif`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       })
       
-      const salesData = await response.json()
+      const result = await response.json()
       
-      if (Array.isArray(salesData)) {
-        // Extract unique store names
-        const uniqueStores = Array.from(
-          new Set(
-            salesData
-              .map((sale: any) => sale.namaTokoTransaksi || sale.toko)
-              .filter((name: string) => name && name.trim() !== "")
-          )
-        ).sort() as string[]
-        
-        setAvailableStores(uniqueStores)
-        setFilteredStores(uniqueStores)
-        console.log(`✅ Loaded ${uniqueStores.length} unique stores from sales history`)
+      if (result.success && Array.isArray(result.data)) {
+        const storeNames = result.data.map((toko: any) => toko.nama).sort()
+        setAvailableStores(storeNames)
+        setFilteredStores(storeNames)
+        console.log(`✅ Loaded ${storeNames.length} active stores from master toko`)
+      } else {
+        setAvailableStores([])
+        setFilteredStores([])
       }
     } catch (err) {
-      console.error("❌ Gagal load riwayat toko:", err)
+      console.error("❌ Gagal load master toko:", err)
       setAvailableStores([])
       setFilteredStores([])
     }
@@ -253,141 +234,6 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
     setFormData({ ...formData, namaTokoTransaksi: storeName })
     setShowStoreModal(false)
     setStoreSearchQuery("")
-    setShowAddStoreInput(false)
-    setEditingStore(null)
-    setEditedStoreName("")
-  }
-
-  const handleAddNewStore = () => {
-    if (newStoreName.trim()) {
-      const trimmedName = newStoreName.trim()
-      
-      // Tambahkan ke daftar availableStores jika belum ada
-      if (!availableStores.includes(trimmedName)) {
-        setAvailableStores([...availableStores, trimmedName].sort())
-      }
-      
-      // Set sebagai toko yang dipilih
-      setFormData({ ...formData, namaTokoTransaksi: trimmedName })
-      
-      // Reset dan tutup modal
-      setNewStoreName("")
-      setShowAddStoreInput(false)
-      setShowStoreModal(false)
-      setStoreSearchQuery("")
-    }
-  }
-
-  const handleEditStore = (oldName: string) => {
-    setEditingStore(oldName)
-    setEditedStoreName(oldName)
-  }
-
-  const handleSaveEditStore = async () => {
-    if (editedStoreName.trim() && editingStore) {
-      const trimmedNewName = editedStoreName.trim()
-      
-      // Cek apakah nama baru sudah ada di list (kecuali nama yang sedang diedit)
-      if (trimmedNewName !== editingStore && availableStores.includes(trimmedNewName)) {
-        alert("Nama toko sudah ada di daftar!")
-        return
-      }
-
-      // Konfirmasi ke user
-      const confirm = window.confirm(
-        `Edit nama toko dari "${editingStore}" ke "${trimmedNewName}"?\n\n` +
-        `⚠️ SEMUA riwayat penjualan dengan nama "${editingStore}" akan ikut berubah menjadi "${trimmedNewName}"`
-      )
-
-      if (!confirm) return
-
-      try {
-        // Call API untuk update di database
-        const response = await fetch("/api/stores/update", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            oldName: editingStore,
-            newName: trimmedNewName,
-            spgId: user?.id,
-          }),
-        })
-
-        const result = await response.json()
-
-        if (!response.ok) {
-          throw new Error(result.error || "Gagal update nama toko")
-        }
-
-        console.log(`✅ Updated ${result.updatedCount} sales records`)
-        alert(`✅ Berhasil! ${result.updatedCount} data penjualan telah diupdate`)
-
-        // Update daftar toko di state
-        const updatedStores = availableStores.map(store => 
-          store === editingStore ? trimmedNewName : store
-        ).sort()
-        
-        setAvailableStores(updatedStores)
-        
-        // Jika toko yang diedit adalah toko yang sedang dipilih di form, update juga
-        if (formData.namaTokoTransaksi === editingStore) {
-          setFormData({ ...formData, namaTokoTransaksi: trimmedNewName })
-        }
-        
-        // Reset edit mode
-        setEditingStore(null)
-        setEditedStoreName("")
-
-      } catch (err) {
-        console.error("❌ Error updating store:", err)
-        alert(`❌ Gagal update: ${err instanceof Error ? err.message : "Terjadi kesalahan"}`)
-      }
-    }
-  }
-
-  const handleDeleteStore = async (storeName: string) => {
-    // Konfirmasi delete dengan warning
-    const confirm = window.confirm(
-      `⚠️ PERINGATAN!\n\n` +
-      `Hapus toko "${storeName}" dari sistem?\n\n` +
-      `SEMUA riwayat penjualan dengan nama toko ini akan DIHAPUS PERMANEN!\n\n` +
-      `Apakah Anda yakin?`
-    )
-    
-    if (!confirm) return
-
-    try {
-      // Call API untuk delete
-      const response = await fetch(
-        `/api/stores/update?storeName=${encodeURIComponent(storeName)}&spgId=${user?.id}`,
-        { method: "DELETE" }
-      )
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "Gagal hapus toko")
-      }
-
-      console.log(`✅ Deleted ${result.deletedCount} sales records`)
-      alert(`✅ Berhasil! Toko "${storeName}" dan ${result.deletedCount} data penjualan telah dihapus`)
-
-      // Hapus dari daftar
-      const updatedStores = availableStores.filter(store => store !== storeName)
-      setAvailableStores(updatedStores)
-      
-      // Jika toko yang dihapus sedang dipilih di form, kosongkan
-      if (formData.namaTokoTransaksi === storeName) {
-        setFormData({ ...formData, namaTokoTransaksi: "" })
-      }
-
-      // Reload data toko untuk sinkronisasi
-      await loadStoresFromSalesHistory()
-
-    } catch (err) {
-      console.error("❌ Error deleting store:", err)
-      alert(`❌ Gagal hapus: ${err instanceof Error ? err.message : "Terjadi kesalahan"}`)
-    }
   }
 
   const handleDateChange = (newDate: string) => {
@@ -517,9 +363,8 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
       setTimeout(() => {
         setShowSuccessModal(false)
         
-        // ✅ Refresh daftar toko setelah submit berhasil
-        // Agar toko baru yang baru diinput langsung muncul di list
-        loadStoresFromSalesHistory()
+        // ✅ Refresh daftar toko setelah submit
+        loadStoresFromMaster()
       }, 2500)
     } catch (err) {
       console.error("❌ Gagal submit:", err)
@@ -630,212 +475,74 @@ export default function SalesReportForm({ theme }: SalesReportFormProps) {
         </div>
       )}
 
-      {/* Modal Pilih/Tambah/Edit Toko */}
+      {/* Modal Pilih Toko */}
       {showStoreModal && (
         <div 
           className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}
-          onClick={() => {
-            setShowStoreModal(false)
-            setShowAddStoreInput(false)
-            setNewStoreName("")
-            setEditingStore(null)
-            setEditedStoreName("")
-          }}
+          onClick={() => setShowStoreModal(false)}
         >
           <div 
             className={`${modalBg} rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mx-0 sm:mx-4 border-2 animate-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] sm:max-h-[80vh] flex flex-col`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className={`p-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} flex items-center justify-between`}>
-              <h3 className={`text-lg font-bold ${textClass}`}>
-                {showAddStoreInput ? "Tambah Toko Baru" : "Pilih Nama Toko"}
-              </h3>
+              <h3 className={`text-lg font-bold ${textClass}`}>Pilih Nama Toko</h3>
               <button
-                onClick={() => {
-                  if (showAddStoreInput) {
-                    setShowAddStoreInput(false)
-                    setNewStoreName("")
-                  } else if (editingStore) {
-                    setEditingStore(null)
-                    setEditedStoreName("")
-                  } else {
-                    setShowStoreModal(false)
-                  }
-                }}
+                onClick={() => setShowStoreModal(false)}
                 className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {!showAddStoreInput ? (
-              <>
-                <div className="p-4 space-y-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                    <input
-                      ref={storeSearchInputRef}
-                      type="text"
-                      placeholder="Cari nama toko..."
-                      value={storeSearchQuery}
-                      onChange={(e) => setStoreSearchQuery(e.target.value)}
-                      className={`w-full pl-10 h-11 px-3 py-2 text-sm border ${inputBg} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                    />
-                  </div>
-
-                  <Button
-                    onClick={() => setShowAddStoreInput(true)}
-                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Tambah Toko Baru
-                  </Button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-4 pb-4">
-                  {filteredStores.length === 0 ? (
-                    <div className={`p-8 text-center ${textSecondary}`}>
-                      <Store className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p className="text-sm">
-                        {storeSearchQuery ? "Toko tidak ditemukan" : "Belum ada toko"}
-                      </p>
-                      <p className="text-xs mt-2">Klik tombol "Tambah Toko Baru" di atas</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredStores.map((store, index) => (
-                        <div key={index}>
-                          {editingStore === store ? (
-                            <div className={`p-4 rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 space-y-3`}>
-                              <Input
-                                autoFocus
-                                type="text"
-                                value={editedStoreName}
-                                onChange={(e) => setEditedStoreName(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && editedStoreName.trim()) {
-                                    handleSaveEditStore()
-                                  } else if (e.key === 'Escape') {
-                                    setEditingStore(null)
-                                    setEditedStoreName("")
-                                  }
-                                }}
-                                className={inputBg}
-                              />
-                              <div className="flex gap-2">
-                                <Button
-                                  onClick={() => {
-                                    setEditingStore(null)
-                                    setEditedStoreName("")
-                                  }}
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1"
-                                >
-                                  Batal
-                                </Button>
-                                <Button
-                                  onClick={handleSaveEditStore}
-                                  disabled={!editedStoreName.trim()}
-                                  size="sm"
-                                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
-                                >
-                                  <Save className="w-3 h-3 mr-1" />
-                                  Simpan
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div
-                              className={`p-4 rounded-lg border-2 transition-all ${
-                                formData.namaTokoTransaksi === store
-                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                  : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
-                              }`}
-                            >
-                              <div className="flex items-start gap-3">
-                                <button
-                                  onClick={() => handleStoreSelect(store)}
-                                  className="flex-1 flex items-start gap-3 text-left"
-                                >
-                                  <div className={`w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0`}>
-                                    <Store className="w-5 h-5 text-purple-600" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`font-semibold ${textClass} break-words`}>{store}</p>
-                                  </div>
-                                </button>
-                                <div className="flex gap-1 flex-shrink-0">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleEditStore(store)
-                                    }}
-                                    className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                                    title="Edit nama toko"
-                                  >
-                                    <Edit2 className="w-4 h-4 text-blue-600" />
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleDeleteStore(store)
-                                    }}
-                                    className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                                    title="Hapus toko dari daftar"
-                                  >
-                                    <Trash2 className="w-4 h-4 text-red-600" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="p-4 space-y-4">
-                <div className="space-y-2">
-                  <Label className={textClass}>Nama Toko Baru</Label>
-                  <Input
-                    autoFocus
-                    type="text"
-                    placeholder="Contoh: Toko Sejahtera"
-                    value={newStoreName}
-                    onChange={(e) => setNewStoreName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newStoreName.trim()) {
-                        handleAddNewStore()
-                      }
-                    }}
-                    className={inputBg}
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <Button
-                    onClick={() => {
-                      setShowAddStoreInput(false)
-                      setNewStoreName("")
-                    }}
-                    variant="outline"
-                    className={`flex-1 ${isDark ? 'bg-slate-700 hover:bg-slate-600 border-slate-600' : 'bg-white hover:bg-slate-50'}`}
-                  >
-                    Batal
-                  </Button>
-                  <Button
-                    onClick={handleAddNewStore}
-                    disabled={!newStoreName.trim()}
-                    className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
-                  >
-                    Tambah
-                  </Button>
-                </div>
+            <div className="p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  ref={storeSearchInputRef}
+                  type="text"
+                  placeholder="Cari nama toko..."
+                  value={storeSearchQuery}
+                  onChange={(e) => setStoreSearchQuery(e.target.value)}
+                  className={`w-full pl-10 h-11 px-3 py-2 text-sm border ${inputBg} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
               </div>
-            )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {filteredStores.length === 0 ? (
+                <div className={`p-8 text-center ${textSecondary}`}>
+                  <Store className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">
+                    {storeSearchQuery ? "Toko tidak ditemukan" : "Belum ada toko"}
+                  </p>
+                  <p className="text-xs mt-2">Hubungi admin untuk menambahkan toko</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredStores.map((store, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleStoreSelect(store)}
+                      className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                        formData.namaTokoTransaksi === store
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : `border-slate-200 dark:border-slate-700 ${isDark ? 'bg-slate-700/50' : 'bg-white'} hover:border-slate-300 dark:hover:border-slate-600`
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0`}>
+                          <Store className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold ${textClass} break-words`}>{store}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

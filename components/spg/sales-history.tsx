@@ -23,7 +23,7 @@ interface SalesData {
   total: number
   category: string
   notes: string
-  createdAt: string  // 🆕 Field baru untuk tanggal input
+  createdAt: string
 }
 
 interface SalesHistoryProps {
@@ -60,7 +60,11 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
         spgId: user!.id.toString(),
       })
 
-      const response = await fetch(`/api/sales/list?${params.toString()}`)
+      // ✅ FIX: Tambah cache: 'no-store' agar data selalu fresh
+      const response = await fetch(`/api/sales/list?${params.toString()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      })
       if (!response.ok) throw new Error("Gagal mengambil data penjualan")
 
       const data = await response.json()
@@ -82,7 +86,7 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
           total: item.total || 0,
           category: item.category || "Pack/Karton",
           notes: item.notes || "",
-          createdAt: item.createdAt || item.tanggal,  // 🆕 Ambil createdAt dari API
+          createdAt: item.created_at || item.tanggal,  // ✅ FIX: snake_case
         }))
         setSalesData(transformed)
       } else {
@@ -100,7 +104,6 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
   const cardBg = isDark ? "bg-slate-800/50 backdrop-blur border-slate-700" : "bg-white/80 backdrop-blur border-slate-200"
   const textClass = isDark ? "text-slate-100" : "text-slate-900"
   const textSecondary = isDark ? "text-slate-400" : "text-slate-600"
-  const statBg = isDark ? "bg-slate-700/50" : "bg-slate-50"
 
   const SkeletonCard = () => (
     <div className={`border-0 shadow-lg ${cardBg} rounded-lg`}>
