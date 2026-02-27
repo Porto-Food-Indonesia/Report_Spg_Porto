@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAllUsers } from "@/lib/db-utils"
+import bcrypt from "bcryptjs"  // ← TAMBAH INI
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,14 +20,22 @@ export async function POST(request: NextRequest) {
     // 🔹 Ambil semua user dari database
     const users = await getAllUsers()
 
-    // 🔹 Cek apakah email dan password cocok
+    // 🔹 Cari user berdasarkan email dulu
     const user = users.find(
-      (u: any) => 
-        u.email.toLowerCase() === cleanEmail && 
-        u.password === password
+      (u: any) => u.email.toLowerCase() === cleanEmail
     )
 
     if (!user) {
+      return NextResponse.json(
+        { error: "Email atau password salah" },
+        { status: 401 }
+      )
+    }
+
+    // ⭐ FIX: Pakai bcrypt.compare() untuk verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password)
+
+    if (!isPasswordValid) {
       return NextResponse.json(
         { error: "Email atau password salah" },
         { status: 401 }
