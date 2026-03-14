@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -66,7 +66,123 @@ function getCurrentMonthRange() {
   }
 }
 
-export default function SalesReportView({ theme }: SalesReportViewProps) {
+// Pre-format dates once at parse time, not on every render
+function formatInputDate(dateStr: string) {
+  if (!dateStr) return "-"
+  const d = new Date(dateStr)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+function formatTxDate(dateStr: string) {
+  if (!dateStr) return "-"
+  const d = new Date(dateStr)
+  return d.toLocaleDateString("id-ID")
+}
+
+interface TableRowProps {
+  item: SalesReport
+  index: number
+  isSelected: boolean
+  onSelect: (id: string) => void
+  tableBorder: string
+  tableHoverBg: string
+  tableBg: string
+  textPrimary: string
+  textSecondary: string
+}
+
+const TableRow = memo(function TableRow({
+  item,
+  index,
+  isSelected,
+  onSelect,
+  tableBorder,
+  tableHoverBg,
+  tableBg,
+  textPrimary,
+  textSecondary,
+}: TableRowProps) {
+  const isCurah = item.produkCategory === "Curah"
+  const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
+
+  return (
+    <tr
+      className={`border-b ${tableBorder} ${tableHoverBg} transition-colors ${
+        index % 2 === 0 ? tableBg : ""
+      } ${isSelected ? "bg-blue-500/10" : ""}`}
+    >
+      <td className="px-4 py-3">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onSelect(item.id)}
+          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+        />
+      </td>
+      <td className={`px-4 py-3 text-sm ${textSecondary} whitespace-nowrap`}>
+        {formatInputDate(item.created_at)}
+      </td>
+      <td className={`px-4 py-3 text-sm ${textSecondary} whitespace-nowrap`}>
+        {formatTxDate(item.tanggal)}
+      </td>
+      <td className={`px-4 py-3 text-sm ${textPrimary} font-medium whitespace-nowrap`}>
+        {item.spgNama}
+      </td>
+      <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.produk}</td>
+      <td className="px-4 py-3 text-sm">
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+            isCurah
+              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+              : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+          }`}
+        >
+          {isCurah && <Weight className="w-3 h-3" />}
+          {item.produkCategory || "Pack/Karton"}
+        </span>
+      </td>
+      <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.toko}</td>
+      <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+        {isCurah ? "-" : item.penjualanPcs || 0}
+      </td>
+      <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+        {isCurah ? "-" : item.penjualanKarton || 0}
+      </td>
+      <td className={`px-4 py-3 text-sm text-right ${textSecondary} whitespace-nowrap`}>
+        {isCurah ? (
+          <span className="font-semibold text-emerald-400">
+            Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}
+          </span>
+        ) : (
+          <span>Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}</span>
+        )}
+      </td>
+      <td className={`px-4 py-3 text-sm text-right ${textSecondary} whitespace-nowrap`}>
+        {isCurah ? "-" : <span>Rp {(item.hargaKarton || 0).toLocaleString("id-ID")}</span>}
+      </td>
+      <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+        {isCurah ? "-" : stockPack}
+      </td>
+      <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+        {isCurah ? "-" : item.penjualanKarton || 0}
+      </td>
+      <td className="px-4 py-3 text-sm text-right font-semibold text-blue-400 whitespace-nowrap">
+        Rp {(item.total || 0).toLocaleString("id-ID")}
+      </td>
+      <td className="px-4 py-3 text-sm text-right">
+        {isCurah ? (
+          <span className="font-semibold text-emerald-400">
+            {(item.penjualanGram || 0).toLocaleString()} gr
+          </span>
+        ) : (
+          "-"
+        )}
+      </td>
+    </tr>
+  )
+})
+
+
   const { start: initStart, end: initEnd } = getCurrentMonthRange()
 
   // State Management
@@ -87,8 +203,12 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
   const [appliedStartDate, setAppliedStartDate] = useState(initStart)
   const [appliedEndDate, setAppliedEndDate] = useState(initEnd)
 
-  // Delete States
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  // CLIENT-SIDE filters — no fetch needed, instant filter from salesData
+  const [filterToko, setFilterToko] = useState("semua")
+  const [filterKategori, setFilterKategori] = useState("semua") // "semua" | "Curah" | "Pack"
+
+  // Delete States — Set for O(1) has() lookup so checkbox renders don't lag
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
 
   // Track if draft differs from applied (to show "Terapkan" button as active)
@@ -171,7 +291,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     setAppliedSpg(selectedSpg)
     setAppliedStartDate(draftStartDate)
     setAppliedEndDate(draftEndDate)
-    setSelectedIds([])
+    setSelectedIds(new Set())
   }
 
   // ─── Period Preset Handler — only updates draft, no fetch yet ─────────────
@@ -215,39 +335,43 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     setAppliedSpg("semua")
     setAppliedStartDate(start)
     setAppliedEndDate(end)
-    setSelectedIds([])
+    setFilterToko("semua")
+    setFilterKategori("semua")
+    setSelectedIds(new Set())
   }
 
   // ─── Checkbox Handlers ────────────────────────────────────────────────────
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedIds(e.target.checked ? salesData.map((item) => item.id) : [])
+    setSelectedIds(e.target.checked ? new Set(filteredData.map((item) => item.id)) : new Set())
   }
 
-  const handleSelectOne = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    )
-  }
+  const handleSelectOne = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }, [])
 
   // ─── Delete Selected ──────────────────────────────────────────────────────
   const handleDeleteSelected = async () => {
-    if (selectedIds.length === 0) {
+    if (selectedIds.size === 0) {
       showToast("Pilih data yang ingin dihapus", "error")
       return
     }
-    if (!confirm(`Hapus ${selectedIds.length} data penjualan?`)) return
+    if (!confirm(`Hapus ${selectedIds.size} data penjualan?`)) return
 
     setIsDeleting(true)
     try {
       const response = await fetch("/api/sales/delete-multiple", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds }),
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
       })
       if (!response.ok) throw new Error("Gagal menghapus data")
 
-      showToast(`${selectedIds.length} data berhasil dihapus`, "success")
-      setSelectedIds([])
+      showToast(`${selectedIds.size} data berhasil dihapus`, "success")
+      setSelectedIds(new Set())
       fetchSalesData({ spg: appliedSpg, start: appliedStartDate, end: appliedEndDate })
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Gagal menghapus data", "error")
@@ -391,13 +515,30 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     }
   }
 
+  // ─── Derived: unique toko list from raw salesData ────────────────────────
+  const tokoList = useMemo(() => {
+    const set = new Set<string>()
+    salesData.forEach((item) => { if (item.toko) set.add(item.toko) })
+    return Array.from(set).sort()
+  }, [salesData])
+
+  // ─── Derived: client-side filtered data (toko + kategori) ────────────────
+  const filteredData = useMemo(() => {
+    return salesData.filter((item) => {
+      if (filterToko !== "semua" && item.toko !== filterToko) return false
+      if (filterKategori === "Curah" && item.produkCategory !== "Curah") return false
+      if (filterKategori === "Pack" && item.produkCategory === "Curah") return false
+      return true
+    })
+  }, [salesData, filterToko, filterKategori])
+
   // ─── Totals ───────────────────────────────────────────────────────────────
-  const totalRevenue = salesData.reduce((sum, item) => sum + (item.total || 0), 0)
-  const totalPcs = salesData.reduce((sum, item) =>
+  const totalRevenue = filteredData.reduce((sum, item) => sum + (item.total || 0), 0)
+  const totalPcs = filteredData.reduce((sum, item) =>
     item.produkCategory === "Curah" ? sum : sum + (item.penjualanPcs || 0), 0)
-  const totalKarton = salesData.reduce((sum, item) =>
+  const totalKarton = filteredData.reduce((sum, item) =>
     item.produkCategory === "Curah" ? sum : sum + (item.penjualanKarton || 0), 0)
-  const totalGram = salesData.reduce((sum, item) =>
+  const totalGram = filteredData.reduce((sum, item) =>
     item.produkCategory === "Curah" ? sum + (item.penjualanGram || 0) : sum, 0)
 
   // ─── Theme Classes ────────────────────────────────────────────────────────
@@ -453,7 +594,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
 
               {/* Periode */}
               <div className="space-y-2">
@@ -483,6 +624,35 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                       {user.nama}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              {/* Toko */}
+              <div className="space-y-2">
+                <Label className={textSecondary}>Toko</Label>
+                <select
+                  value={filterToko}
+                  onChange={(e) => setFilterToko(e.target.value)}
+                  className={`w-full h-10 px-3 py-2 text-sm ${inputBg} ${inputText} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
+                >
+                  <option value="semua">Semua Toko</option>
+                  {tokoList.map((toko) => (
+                    <option key={toko} value={toko}>{toko}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Kategori */}
+              <div className="space-y-2">
+                <Label className={textSecondary}>Kategori</Label>
+                <select
+                  value={filterKategori}
+                  onChange={(e) => setFilterKategori(e.target.value)}
+                  className={`w-full h-10 px-3 py-2 text-sm ${inputBg} ${inputText} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
+                >
+                  <option value="semua">Semua Kategori</option>
+                  <option value="Curah">Curah</option>
+                  <option value="Pack">Pack / Karton</option>
                 </select>
               </div>
 
@@ -577,33 +747,53 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
               </div>
             </div>
 
-            {/* Info tanggal yang sedang aktif */}
-            {(appliedStartDate || appliedEndDate) && (
-              <div className={`mt-3 flex items-center gap-2 text-xs ${textMuted}`}>
-                <Filter className="w-3 h-3" />
-                <span>
-                  Menampilkan data:{" "}
-                  <span className={`font-semibold ${textSecondary}`}>
+            {/* Info filter aktif */}
+            {(appliedStartDate || appliedEndDate || filterToko !== "semua" || filterKategori !== "semua") && (
+              <div className={`mt-3 flex flex-wrap items-center gap-2 text-xs ${textMuted}`}>
+                <Filter className="w-3 h-3 flex-shrink-0" />
+                {(appliedStartDate || appliedEndDate) && (
+                  <span className={`px-2 py-0.5 rounded-full border ${theme === "dark" ? "border-slate-600 bg-slate-700/50" : "border-slate-300 bg-slate-100"} ${textSecondary}`}>
+                    📅{" "}
                     {appliedStartDate
-                      ? new Date(appliedStartDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+                      ? new Date(appliedStartDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
                       : "Awal"}
                     {" → "}
                     {appliedEndDate
-                      ? new Date(appliedEndDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+                      ? new Date(appliedEndDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
                       : "Akhir"}
                   </span>
-                  {appliedSpg !== "semua" && (
-                    <span> · SPG: <span className={`font-semibold ${textSecondary}`}>{users.find((u) => u.id === appliedSpg)?.nama}</span></span>
-                  )}
+                )}
+                {appliedSpg !== "semua" && (
+                  <span className={`px-2 py-0.5 rounded-full border ${theme === "dark" ? "border-slate-600 bg-slate-700/50" : "border-slate-300 bg-slate-100"} ${textSecondary}`}>
+                    👤 {users.find((u) => u.id === appliedSpg)?.nama}
+                  </span>
+                )}
+                {filterToko !== "semua" && (
+                  <span className={`px-2 py-0.5 rounded-full border ${theme === "dark" ? "border-blue-500/40 bg-blue-500/10" : "border-blue-300 bg-blue-50"} text-blue-400`}>
+                    🏪 {filterToko}
+                  </span>
+                )}
+                {filterKategori !== "semua" && (
+                  <span className={`px-2 py-0.5 rounded-full border ${
+                    filterKategori === "Curah"
+                      ? (theme === "dark" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" : "border-emerald-300 bg-emerald-50 text-emerald-600")
+                      : (theme === "dark" ? "border-purple-500/40 bg-purple-500/10 text-purple-400" : "border-purple-300 bg-purple-50 text-purple-600")
+                  }`}>
+                    {filterKategori === "Curah" ? "⚖️ Curah" : "📦 Pack / Karton"}
+                  </span>
+                )}
+                <span className={textMuted}>
+                  · {filteredData.length} data ditampilkan
+                  {filteredData.length !== salesData.length && ` (dari ${salesData.length})`}
                 </span>
               </div>
             )}
 
             {/* Delete Bar */}
-            {selectedIds.length > 0 && (
+            {selectedIds.size > 0 && (
               <div className="mt-4 flex items-center justify-between p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
                 <span className={`text-sm ${textPrimary} font-medium`}>
-                  {selectedIds.length} data terpilih
+                  {selectedIds.size} data terpilih
                 </span>
                 <Button
                   onClick={handleDeleteSelected}
@@ -632,7 +822,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
           {[
             {
               label: "Total Transaksi",
-              value: salesData.length.toLocaleString(),
+              value: filteredData.length.toLocaleString(),
               icon: ShoppingCart,
               gradient: "from-blue-500 to-cyan-500",
             },
@@ -723,7 +913,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                   ))}
                 </div>
               </div>
-            ) : salesData.length === 0 ? (
+            ) : filteredData.length === 0 ? (
               <div className="text-center py-12">
                 <ShoppingCart className={`w-16 h-16 ${textMuted} mx-auto mb-4`} />
                 <p className={textMuted}>Tidak ada data penjualan</p>
@@ -737,7 +927,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                       <th className="px-4 py-3 text-left sticky left-0 z-10">
                         <input
                           type="checkbox"
-                          checked={salesData.length > 0 && selectedIds.length === salesData.length}
+                          checked={filteredData.length > 0 && selectedIds.size === filteredData.length}
                           onChange={handleSelectAll}
                           className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                         />
@@ -756,93 +946,20 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {salesData.map((item, index) => {
-                      const isCurah = item.produkCategory === "Curah"
-                      const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
-                      const isSelected = selectedIds.includes(item.id)
-
-                      return (
-                        <tr
-                          key={item.id}
-                          className={`border-b ${tableBorder} ${tableHoverBg} transition-colors ${
-                            index % 2 === 0 ? tableBg : ""
-                          } ${isSelected ? "bg-blue-500/10" : ""}`}
-                        >
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleSelectOne(item.id)}
-                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                            />
-                          </td>
-                          <td className={`px-4 py-3 text-sm ${textSecondary} whitespace-nowrap`}>
-                            {item.created_at
-                              ? new Date(item.created_at).toLocaleString("id-ID", {
-                                  year: "numeric", month: "2-digit", day: "2-digit",
-                                  hour: "2-digit", minute: "2-digit", hour12: false,
-                                })
-                              : "-"}
-                          </td>
-                          <td className={`px-4 py-3 text-sm ${textSecondary} whitespace-nowrap`}>
-                            {item.tanggal ? new Date(item.tanggal).toLocaleDateString("id-ID") : "-"}
-                          </td>
-                          <td className={`px-4 py-3 text-sm ${textPrimary} font-medium whitespace-nowrap`}>
-                            {item.spgNama}
-                          </td>
-                          <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.produk}</td>
-                          <td className="px-4 py-3 text-sm">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                isCurah
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                  : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                              }`}
-                            >
-                              {isCurah && <Weight className="w-3 h-3" />}
-                              {item.produkCategory || "Pack/Karton"}
-                            </span>
-                          </td>
-                          <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.toko}</td>
-                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
-                            {isCurah ? "-" : item.penjualanPcs || 0}
-                          </td>
-                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
-                            {isCurah ? "-" : item.penjualanKarton || 0}
-                          </td>
-                          <td className={`px-4 py-3 text-sm text-right ${textSecondary} whitespace-nowrap`}>
-                            {isCurah ? (
-                              <span className="font-semibold text-emerald-400">
-                                Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}
-                              </span>
-                            ) : (
-                              <span>Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}</span>
-                            )}
-                          </td>
-                          <td className={`px-4 py-3 text-sm text-right ${textSecondary} whitespace-nowrap`}>
-                            {isCurah ? "-" : <span>Rp {(item.hargaKarton || 0).toLocaleString("id-ID")}</span>}
-                          </td>
-                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
-                            {isCurah ? "-" : stockPack}
-                          </td>
-                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
-                            {isCurah ? "-" : item.penjualanKarton || 0}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right font-semibold text-blue-400 whitespace-nowrap">
-                            Rp {(item.total || 0).toLocaleString("id-ID")}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right">
-                            {isCurah ? (
-                              <span className="font-semibold text-emerald-400">
-                                {(item.penjualanGram || 0).toLocaleString()} gr
-                              </span>
-                            ) : (
-                              "-"
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
+                    {filteredData.map((item, index) => (
+                      <TableRow
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        isSelected={selectedIds.has(item.id)}
+                        onSelect={handleSelectOne}
+                        tableBorder={tableBorder}
+                        tableHoverBg={tableHoverBg}
+                        tableBg={tableBg}
+                        textPrimary={textPrimary}
+                        textSecondary={textSecondary}
+                      />
+                    ))}
                   </tbody>
                 </table>
               </div>
