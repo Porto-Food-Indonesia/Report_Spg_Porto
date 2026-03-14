@@ -16,7 +16,8 @@ import {
   ShoppingCart,
   Package,
   DollarSign,
-  TrendingUp
+  TrendingUp,
+  Search
 } from "lucide-react"
 import * as XLSX from "xlsx"
 
@@ -75,18 +76,26 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
   const [error, setError] = useState("")
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  // Filter States — initialized with current month so first fetch is correct
+  // DRAFT filter states — these change freely without triggering fetch
   const [selectedSpg, setSelectedSpg] = useState("semua")
-  const [startDate, setStartDate] = useState(initStart)
-  const [endDate, setEndDate] = useState(initEnd)
+  const [draftStartDate, setDraftStartDate] = useState(initStart)
+  const [draftEndDate, setDraftEndDate] = useState(initEnd)
   const [filterPeriod, setFilterPeriod] = useState("current-month")
+
+  // APPLIED filter states — fetch only runs when these change
+  const [appliedSpg, setAppliedSpg] = useState("semua")
+  const [appliedStartDate, setAppliedStartDate] = useState(initStart)
+  const [appliedEndDate, setAppliedEndDate] = useState(initEnd)
 
   // Delete States
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // Ref to skip re-fetch on initial mount (we fetch once manually)
-  const isInitialMount = useRef(true)
+  // Track if draft differs from applied (to show "Terapkan" button as active)
+  const isDirty =
+    selectedSpg !== appliedSpg ||
+    draftStartDate !== appliedStartDate ||
+    draftEndDate !== appliedEndDate
 
   // ─── Toast ───────────────────────────────────────────────────────────────
   const showToast = (message: string, type: "success" | "error" = "success") => {
@@ -109,7 +118,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     }
   }
 
-  // ─── Fetch Sales (accepts params directly to avoid stale closure) ─────────
+  // ─── Fetch Sales — only called with explicit committed params ─────────────
   const fetchSalesData = useCallback(
     async (params: { spg: string; start: string; end: string }) => {
       try {
@@ -142,35 +151,58 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
   // ─── Initial Load ─────────────────────────────────────────────────────────
   useEffect(() => {
     fetchUsers()
-    // Fetch with the already-initialized current-month dates
     fetchSalesData({ spg: "semua", start: initStart, end: initEnd })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ─── Re-fetch when filters change (skip initial mount) ───────────────────
+  // ─── Fetch only when APPLIED filters change ───────────────────────────────
+  const isInitialMount = useRef(true)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
       return
     }
-    fetchSalesData({ spg: selectedSpg, start: startDate, end: endDate })
+    fetchSalesData({ spg: appliedSpg, start: appliedStartDate, end: appliedEndDate })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSpg, startDate, endDate])
+  }, [appliedSpg, appliedStartDate, appliedEndDate])
 
-  // ─── Period Preset Handler ────────────────────────────────────────────────
+  // ─── Apply Filter (commit draft → applied, triggers fetch) ───────────────
+  const handleApplyFilter = () => {
+    setAppliedSpg(selectedSpg)
+    setAppliedStartDate(draftStartDate)
+    setAppliedEndDate(draftEndDate)
+    setSelectedIds([])
+  }
+
+  // ─── Period Preset Handler — only updates draft, no fetch yet ─────────────
   const handlePeriodChange = (period: string) => {
     setFilterPeriod(period)
 
     if (period === "current-month") {
       const { start, end } = getCurrentMonthRange()
-      // Update both dates atomically — one re-fetch fires via the effect above
-      setStartDate(start)
-      setEndDate(end)
+      setDraftStartDate(start)
+      setDraftEndDate(end)
+      // Auto-apply for presets (not custom)
+      setAppliedSpg(selectedSpg)
+      setAppliedStartDate(start)
+      setAppliedEndDate(end)
     } else if (period === "all") {
-      setStartDate("")
-      setEndDate("")
+      setDraftStartDate("")
+      setDraftEndDate("")
+      // Auto-apply for presets (not custom)
+      setAppliedSpg(selectedSpg)
+      setAppliedStartDate("")
+      setAppliedEndDate("")
     }
-    // "custom" → user will set dates manually; no auto-change
+    // "custom" → user must press Terapkan
+  }
+
+  // ─── SPG change: auto-apply immediately (no date ambiguity) ──────────────
+  const handleSpgChange = (spgId: string) => {
+    setSelectedSpg(spgId)
+    setAppliedSpg(spgId)
+    setAppliedStartDate(draftStartDate)
+    setAppliedEndDate(draftEndDate)
   }
 
   // ─── Reset Filter ─────────────────────────────────────────────────────────
@@ -178,8 +210,11 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     const { start, end } = getCurrentMonthRange()
     setSelectedSpg("semua")
     setFilterPeriod("current-month")
-    setStartDate(start)
-    setEndDate(end)
+    setDraftStartDate(start)
+    setDraftEndDate(end)
+    setAppliedSpg("semua")
+    setAppliedStartDate(start)
+    setAppliedEndDate(end)
     setSelectedIds([])
   }
 
@@ -213,7 +248,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
 
       showToast(`${selectedIds.length} data berhasil dihapus`, "success")
       setSelectedIds([])
-      fetchSalesData({ spg: selectedSpg, start: startDate, end: endDate })
+      fetchSalesData({ spg: appliedSpg, start: appliedStartDate, end: appliedEndDate })
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Gagal menghapus data", "error")
     } finally {
@@ -266,12 +301,12 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
       XLSX.utils.book_append_sheet(workbook, worksheet, "LAPORAN PENJUALAN")
 
       const spgName =
-        selectedSpg === "semua"
+        appliedSpg === "semua"
           ? "Semua_SPG"
-          : users.find((u) => u.id === selectedSpg)?.nama || "SPG"
+          : users.find((u) => u.id === appliedSpg)?.nama || "SPG"
       const dateRange =
-        startDate && endDate
-          ? `${startDate}_to_${endDate}`
+        appliedStartDate && appliedEndDate
+          ? `${appliedStartDate}_to_${appliedEndDate}`
           : new Date().toISOString().split("T")[0]
       XLSX.writeFile(workbook, `LAPORAN_PENJUALAN_${spgName}_${dateRange}.xlsx`)
       showToast("Data berhasil diekspor ke Excel!", "success")
@@ -337,12 +372,12 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
       link.href = url
 
       const spgName =
-        selectedSpg === "semua"
+        appliedSpg === "semua"
           ? "Semua_SPG"
-          : users.find((u) => u.id === selectedSpg)?.nama || "SPG"
+          : users.find((u) => u.id === appliedSpg)?.nama || "SPG"
       const dateRange =
-        startDate && endDate
-          ? `${startDate}_to_${endDate}`
+        appliedStartDate && appliedEndDate
+          ? `${appliedStartDate}_to_${appliedEndDate}`
           : new Date().toISOString().split("T")[0]
       link.download = `LAPORAN_PENJUALAN_${spgName}_${dateRange}.csv`
       document.body.appendChild(link)
@@ -439,7 +474,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 <Label className={textSecondary}>SPG</Label>
                 <select
                   value={selectedSpg}
-                  onChange={(e) => setSelectedSpg(e.target.value)}
+                  onChange={(e) => handleSpgChange(e.target.value)}
                   className={`w-full h-10 px-3 py-2 text-sm ${inputBg} ${inputText} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
                 >
                   <option value="semua">Semua SPG</option>
@@ -451,15 +486,15 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 </select>
               </div>
 
-              {/* Start Date */}
+              {/* Start Date — only editable in custom mode */}
               <div className="space-y-2">
                 <Label className={textSecondary}>Tanggal Mulai</Label>
                 <Input
                   type="date"
-                  value={startDate}
+                  value={draftStartDate}
                   onChange={(e) => {
-                    setStartDate(e.target.value)
-                    setFilterPeriod("custom")
+                    setDraftStartDate(e.target.value)
+                    if (filterPeriod !== "custom") setFilterPeriod("custom")
                   }}
                   disabled={filterPeriod !== "custom"}
                   className={`${inputBg} ${inputText} focus:ring-blue-500 ${
@@ -473,10 +508,10 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 <Label className={textSecondary}>Tanggal Akhir</Label>
                 <Input
                   type="date"
-                  value={endDate}
+                  value={draftEndDate}
                   onChange={(e) => {
-                    setEndDate(e.target.value)
-                    setFilterPeriod("custom")
+                    setDraftEndDate(e.target.value)
+                    if (filterPeriod !== "custom") setFilterPeriod("custom")
                   }}
                   disabled={filterPeriod !== "custom"}
                   className={`${inputBg} ${inputText} focus:ring-blue-500 ${
@@ -485,21 +520,33 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 />
               </div>
 
-              {/* Reset */}
+              {/* Reset + Terapkan */}
               <div className="space-y-2">
-                <Label className={`${textSecondary} opacity-0`}>Reset</Label>
-                <Button
-                  onClick={handleResetFilter}
-                  variant="outline"
-                  className={`w-full ${
-                    theme === "dark"
-                      ? "bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600 hover:text-white"
-                      : "bg-white border-slate-300 text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  Reset
-                </Button>
+                <Label className={`${textSecondary} opacity-0`}>Aksi</Label>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleResetFilter}
+                    variant="outline"
+                    className={`flex-1 ${
+                      theme === "dark"
+                        ? "bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600 hover:text-white"
+                        : "bg-white border-slate-300 text-slate-900 hover:bg-slate-100"
+                    }`}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </Button>
+                  {/* Terapkan — only shown & active in custom mode when there's unsaved change */}
+                  {filterPeriod === "custom" && (
+                    <Button
+                      onClick={handleApplyFilter}
+                      disabled={!isDirty || !draftStartDate || !draftEndDate}
+                      className="flex-1 gap-1 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40"
+                    >
+                      <Search className="w-4 h-4" />
+                      Cari
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Export */}
@@ -529,6 +576,28 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 </div>
               </div>
             </div>
+
+            {/* Info tanggal yang sedang aktif */}
+            {(appliedStartDate || appliedEndDate) && (
+              <div className={`mt-3 flex items-center gap-2 text-xs ${textMuted}`}>
+                <Filter className="w-3 h-3" />
+                <span>
+                  Menampilkan data:{" "}
+                  <span className={`font-semibold ${textSecondary}`}>
+                    {appliedStartDate
+                      ? new Date(appliedStartDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+                      : "Awal"}
+                    {" → "}
+                    {appliedEndDate
+                      ? new Date(appliedEndDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+                      : "Akhir"}
+                  </span>
+                  {appliedSpg !== "semua" && (
+                    <span> · SPG: <span className={`font-semibold ${textSecondary}`}>{users.find((u) => u.id === appliedSpg)?.nama}</span></span>
+                  )}
+                </span>
+              </div>
+            )}
 
             {/* Delete Bar */}
             {selectedIds.length > 0 && (
