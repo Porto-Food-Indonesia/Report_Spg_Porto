@@ -31,6 +31,7 @@ interface SalesReport {
   spgNama: string
   produk: string
   produkCategory: string
+  category?: string
   produkPcsPerKarton: number
   penjualanKarton: number
   penjualanPcs: number
@@ -106,7 +107,7 @@ const TableRow = memo(function TableRow({
   textPrimary,
   textSecondary,
 }: TableRowProps) {
-  const isCurah = item.produkCategory === "Curah"
+  const isCurah = (item.produkCategory || item.category || "") === "Curah"
   const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
 
   return (
@@ -142,7 +143,7 @@ const TableRow = memo(function TableRow({
           }`}
         >
           {isCurah && <Weight className="w-3 h-3" />}
-          {item.produkCategory || "Pack/Karton"}
+          {item.produkCategory || item.category || "Pack/Karton"}
         </span>
       </td>
       <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.toko}</td>
@@ -307,17 +308,17 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
   const filteredData = useMemo(() => {
     return salesData.filter((item) => {
       if (filterToko !== "semua" && item.toko !== filterToko) return false
-      if (filterKategori === "Curah" && item.produkCategory !== "Curah") return false
-      if (filterKategori === "Pack" && item.produkCategory === "Curah") return false
+      if (filterKategori === "Curah" && (item.produkCategory || item.category || "") !== "Curah") return false
+      if (filterKategori === "Pack" && (item.produkCategory || item.category || "") === "Curah") return false
       return true
     })
   }, [salesData, filterToko, filterKategori])
 
   // Totals
   const totalRevenue = filteredData.reduce((s, i) => s + (i.total || 0), 0)
-  const totalPcs = filteredData.reduce((s, i) => i.produkCategory === "Curah" ? s : s + (i.penjualanPcs || 0), 0)
-  const totalKarton = filteredData.reduce((s, i) => i.produkCategory === "Curah" ? s : s + (i.penjualanKarton || 0), 0)
-  const totalGram = filteredData.reduce((s, i) => i.produkCategory === "Curah" ? s + (i.penjualanGram || 0) : s, 0)
+  const totalPcs = filteredData.reduce((s, i) => (i.produkCategory || i.category || "") === "Curah" ? s : s + (i.penjualanPcs || 0), 0)
+  const totalKarton = filteredData.reduce((s, i) => (i.produkCategory || i.category || "") === "Curah" ? s : s + (i.penjualanKarton || 0), 0)
+  const totalGram = filteredData.reduce((s, i) => (i.produkCategory || i.category || "") === "Curah" ? s + (i.penjualanGram || 0) : s, 0)
 
   // Handlers
   const handleApplyFilter = () => {
@@ -393,7 +394,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     try {
       const exportData = filteredData.map((item, index) => {
         const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
-        const isCurah = item.produkCategory === "Curah"
+        const isCurah = (item.produkCategory || item.category || "") === "Curah"
         return {
           NO: index + 1,
           "TANGGAL INPUT": item.created_at ? new Date(item.created_at).toLocaleString("id-ID", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "-",
@@ -427,7 +428,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
       const headers = ["NO", "TANGGAL INPUT", "TANGGAL TRANSAKSI", "NAMA", "PRODUK", "PACK", "KARTON", "HARGA_PACK", "HARGA_KARTON", "STOCK_PACK", "STOCK_KARTON", "TOTAL_SELLOUT", "TOKO", "GRAM"]
       const rows = filteredData.map((item, index) => {
         const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
-        const isCurah = item.produkCategory === "Curah"
+        const isCurah = (item.produkCategory || item.category || "") === "Curah"
         return [
           index + 1,
           item.created_at ? new Date(item.created_at).toLocaleString("id-ID", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "-",
