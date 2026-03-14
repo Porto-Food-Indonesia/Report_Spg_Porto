@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -54,7 +54,20 @@ interface SalesReportViewProps {
   theme: "dark" | "light"
 }
 
+// Helper: get current month date range
+function getCurrentMonthRange() {
+  const now = new Date()
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  return {
+    start: firstDay.toISOString().split("T")[0],
+    end: lastDay.toISOString().split("T")[0],
+  }
+}
+
 export default function SalesReportView({ theme }: SalesReportViewProps) {
+  const { start: initStart, end: initEnd } = getCurrentMonthRange()
+
   // State Management
   const [salesData, setSalesData] = useState<SalesReport[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -62,166 +75,145 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
   const [error, setError] = useState("")
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  // Filter States
+  // Filter States — initialized with current month so first fetch is correct
   const [selectedSpg, setSelectedSpg] = useState("semua")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  const [startDate, setStartDate] = useState(initStart)
+  const [endDate, setEndDate] = useState(initEnd)
   const [filterPeriod, setFilterPeriod] = useState("current-month")
 
   // Delete States
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // Toast Notification
+  // Ref to skip re-fetch on initial mount (we fetch once manually)
+  const isInitialMount = useRef(true)
+
+  // ─── Toast ───────────────────────────────────────────────────────────────
   const showToast = (message: string, type: "success" | "error" = "success") => {
     const id = Date.now()
     setToasts((prev) => [...prev, { id, message, type }])
     setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id))
+      setToasts((prev) => prev.filter((t) => t.id !== id))
     }, 3000)
   }
 
-  // Set Date Range Based On Period
-  useEffect(() => {
-    if (filterPeriod === "current-month") {
-      const now = new Date()
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      setStartDate(firstDay.toISOString().split("T")[0])
-      setEndDate(lastDay.toISOString().split("T")[0])
-    } else if (filterPeriod === "all") {
-      setStartDate("")
-      setEndDate("")
-    }
-    // if "custom", do nothing (user will set dates)
-  }, [filterPeriod])
-
-  // Initial Data Fetch
-  useEffect(() => {
-    fetchSalesData()
-    fetchUsers()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Fetch Data on Filter Change (when not loading initial)
-  useEffect(() => {
-    if (!loading) {
-      fetchSalesData()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSpg, startDate, endDate])
-
-  // Fetch Users
+  // ─── Fetch Users ─────────────────────────────────────────────────────────
   const fetchUsers = async () => {
     try {
       const response = await fetch("/api/users/list")
       const data = await response.json()
-      if (Array.isArray(data)) {
-        setUsers(data)
-      } else {
-        setUsers([])
-      }
+      setUsers(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error("❌ Gagal fetch users:", err)
       setUsers([])
     }
   }
 
-  // Fetch Sales Data
-  const fetchSalesData = async () => {
-    try {
-      setLoading(true)
-      setError("")
+  // ─── Fetch Sales (accepts params directly to avoid stale closure) ─────────
+  const fetchSalesData = useCallback(
+    async (params: { spg: string; start: string; end: string }) => {
+      try {
+        setLoading(true)
+        setError("")
 
-      const params = new URLSearchParams()
-      if (selectedSpg && selectedSpg !== "semua") {
-        params.append("spgId", selectedSpg)
-      }
-      if (startDate) {
-        params.append("startDate", startDate)
-      }
-      if (endDate) {
-        params.append("endDate", endDate)
-      }
+        const query = new URLSearchParams()
+        if (params.spg && params.spg !== "semua") query.append("spgId", params.spg)
+        if (params.start) query.append("startDate", params.start)
+        if (params.end) query.append("endDate", params.end)
 
-      const url = `/api/sales/list${params.toString() ? `?${params.toString()}` : ""}`
-      const response = await fetch(url)
+        const url = `/api/sales/list${query.toString() ? `?${query.toString()}` : ""}`
+        const response = await fetch(url)
 
-      if (!response.ok) {
-        throw new Error("Gagal mengambil data penjualan")
-      }
+        if (!response.ok) throw new Error("Gagal mengambil data penjualan")
 
-      const data = await response.json()
-
-      if (Array.isArray(data)) {
-        setSalesData(data)
-      } else {
+        const data = await response.json()
+        setSalesData(Array.isArray(data) ? data : [])
+        if (!Array.isArray(data)) setError("Format data tidak valid")
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Terjadi kesalahan")
         setSalesData([])
-        setError("Format data tidak valid")
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan")
-      setSalesData([])
-    } finally {
-      setLoading(false)
+    },
+    []
+  )
+
+  // ─── Initial Load ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchUsers()
+    // Fetch with the already-initialized current-month dates
+    fetchSalesData({ spg: "semua", start: initStart, end: initEnd })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ─── Re-fetch when filters change (skip initial mount) ───────────────────
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
     }
+    fetchSalesData({ spg: selectedSpg, start: startDate, end: endDate })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSpg, startDate, endDate])
+
+  // ─── Period Preset Handler ────────────────────────────────────────────────
+  const handlePeriodChange = (period: string) => {
+    setFilterPeriod(period)
+
+    if (period === "current-month") {
+      const { start, end } = getCurrentMonthRange()
+      // Update both dates atomically — one re-fetch fires via the effect above
+      setStartDate(start)
+      setEndDate(end)
+    } else if (period === "all") {
+      setStartDate("")
+      setEndDate("")
+    }
+    // "custom" → user will set dates manually; no auto-change
   }
 
-  // Reset Filter
+  // ─── Reset Filter ─────────────────────────────────────────────────────────
   const handleResetFilter = () => {
+    const { start, end } = getCurrentMonthRange()
     setSelectedSpg("semua")
     setFilterPeriod("current-month")
+    setStartDate(start)
+    setEndDate(end)
     setSelectedIds([])
   }
 
-  // Select All Checkbox
+  // ─── Checkbox Handlers ────────────────────────────────────────────────────
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(salesData.map((item) => item.id))
-    } else {
-      setSelectedIds([])
-    }
+    setSelectedIds(e.target.checked ? salesData.map((item) => item.id) : [])
   }
 
-  // Select Individual Checkbox
   const handleSelectOne = (id: string) => {
-    setSelectedIds((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((item) => item !== id)
-      } else {
-        return [...prev, id]
-      }
-    })
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
   }
 
-  // Delete Selected Items
+  // ─── Delete Selected ──────────────────────────────────────────────────────
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) {
       showToast("Pilih data yang ingin dihapus", "error")
       return
     }
-
-    if (!confirm(`Hapus ${selectedIds.length} data penjualan?`)) {
-      return
-    }
+    if (!confirm(`Hapus ${selectedIds.length} data penjualan?`)) return
 
     setIsDeleting(true)
     try {
       const response = await fetch("/api/sales/delete-multiple", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ ids: selectedIds })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds }),
       })
-
-      if (!response.ok) {
-        throw new Error("Gagal menghapus data")
-      }
+      if (!response.ok) throw new Error("Gagal menghapus data")
 
       showToast(`${selectedIds.length} data berhasil dihapus`, "success")
       setSelectedIds([])
-      await fetchSalesData()
+      fetchSalesData({ spg: selectedSpg, start: startDate, end: endDate })
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Gagal menghapus data", "error")
     } finally {
@@ -229,32 +221,27 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     }
   }
 
-  // Export to Excel
+  // ─── Export to Excel ──────────────────────────────────────────────────────
   const handleExportToExcel = () => {
     if (salesData.length === 0) {
       showToast("Tidak ada data untuk diekspor", "error")
       return
     }
-
     try {
       const exportData = salesData.map((item, index) => {
         const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
         const isCurah = item.produkCategory === "Curah"
-
         return {
           NO: index + 1,
           "TANGGAL INPUT": item.created_at
             ? new Date(item.created_at).toLocaleString("id-ID", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: false
+                year: "numeric", month: "2-digit", day: "2-digit",
+                hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
               })
             : "-",
-          "TANGGAL TRANSAKSI": item.tanggal ? new Date(item.tanggal).toLocaleDateString("id-ID") : "-",
+          "TANGGAL TRANSAKSI": item.tanggal
+            ? new Date(item.tanggal).toLocaleDateString("id-ID")
+            : "-",
           NAMA: item.spgNama,
           PRODUK: item.produk,
           PACK: isCurah ? "-" : item.penjualanPcs || 0,
@@ -265,38 +252,28 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
           STOCK_KARTON: isCurah ? "-" : item.penjualanKarton || 0,
           TOTAL_SELLOUT: item.total || 0,
           TOKO: item.toko || "-",
-          GRAM: isCurah ? item.penjualanGram || 0 : "-"
+          GRAM: isCurah ? item.penjualanGram || 0 : "-",
         }
       })
 
       const worksheet = XLSX.utils.json_to_sheet(exportData)
       worksheet["!cols"] = [
-        { wch: 5 },
-        { wch: 20 },
-        { wch: 18 },
-        { wch: 20 },
-        { wch: 25 },
-        { wch: 10 },
-        { wch: 10 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 18 },
-        { wch: 30 },
-        { wch: 12 }
+        { wch: 5 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 25 },
+        { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 18 }, { wch: 30 }, { wch: 12 },
       ]
-
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "LAPORAN PENJUALAN")
 
       const spgName =
-        selectedSpg === "semua" ? "Semua_SPG" : users.find((u) => u.id === selectedSpg)?.nama || "SPG"
+        selectedSpg === "semua"
+          ? "Semua_SPG"
+          : users.find((u) => u.id === selectedSpg)?.nama || "SPG"
       const dateRange =
-        startDate && endDate ? `${startDate}_to_${endDate}` : new Date().toISOString().split("T")[0]
-      const filename = `LAPORAN_PENJUALAN_${spgName}_${dateRange}.xlsx`
-
-      XLSX.writeFile(workbook, filename)
+        startDate && endDate
+          ? `${startDate}_to_${endDate}`
+          : new Date().toISOString().split("T")[0]
+      XLSX.writeFile(workbook, `LAPORAN_PENJUALAN_${spgName}_${dateRange}.xlsx`)
       showToast("Data berhasil diekspor ke Excel!", "success")
     } catch (err) {
       console.error(err)
@@ -304,46 +281,27 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     }
   }
 
-  // Export to CSV
+  // ─── Export to CSV ────────────────────────────────────────────────────────
   const handleExportToCSV = () => {
     if (salesData.length === 0) {
       showToast("Tidak ada data untuk diekspor", "error")
       return
     }
-
     try {
       const headers = [
-        "NO",
-        "TANGGAL INPUT",
-        "TANGGAL TRANSAKSI",
-        "NAMA",
-        "PRODUK",
-        "PACK",
-        "KARTON",
-        "HARGA_PACK",
-        "HARGA_KARTON",
-        "STOCK_PACK",
-        "STOCK_KARTON",
-        "TOTAL_SELLOUT",
-        "TOKO",
-        "GRAM"
+        "NO","TANGGAL INPUT","TANGGAL TRANSAKSI","NAMA","PRODUK",
+        "PACK","KARTON","HARGA_PACK","HARGA_KARTON","STOCK_PACK",
+        "STOCK_KARTON","TOTAL_SELLOUT","TOKO","GRAM",
       ]
-
       const rows = salesData.map((item, index) => {
         const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
         const isCurah = item.produkCategory === "Curah"
-
         return [
           index + 1,
           item.created_at
             ? new Date(item.created_at).toLocaleString("id-ID", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: false
+                year: "numeric", month: "2-digit", day: "2-digit",
+                hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
               })
             : "-",
           item.tanggal ? new Date(item.tanggal).toLocaleDateString("id-ID") : "-",
@@ -357,7 +315,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
           isCurah ? "-" : item.penjualanKarton || 0,
           item.total || 0,
           item.toko || "-",
-          isCurah ? item.penjualanGram || 0 : "-"
+          isCurah ? item.penjualanGram || 0 : "-",
         ]
       })
 
@@ -366,14 +324,11 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
         ...rows.map((row) =>
           row
             .map((cell) => {
-              const cellStr = String(cell)
-              if (cellStr.includes(",") || cellStr.includes('"')) {
-                return `"${cellStr.replace(/"/g, '""')}"`
-              }
-              return cellStr
+              const s = String(cell)
+              return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
             })
             .join(",")
-        )
+        ),
       ].join("\n")
 
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
@@ -382,16 +337,18 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
       link.href = url
 
       const spgName =
-        selectedSpg === "semua" ? "Semua_SPG" : users.find((u) => u.id === selectedSpg)?.nama || "SPG"
+        selectedSpg === "semua"
+          ? "Semua_SPG"
+          : users.find((u) => u.id === selectedSpg)?.nama || "SPG"
       const dateRange =
-        startDate && endDate ? `${startDate}_to_${endDate}` : new Date().toISOString().split("T")[0]
-
+        startDate && endDate
+          ? `${startDate}_to_${endDate}`
+          : new Date().toISOString().split("T")[0]
       link.download = `LAPORAN_PENJUALAN_${spgName}_${dateRange}.csv`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
-
       showToast("Data berhasil diekspor ke CSV!", "success")
     } catch (err) {
       console.error(err)
@@ -399,35 +356,16 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     }
   }
 
-  // Calculate Totals
-  const totalRevenue = Array.isArray(salesData)
-    ? salesData.reduce((sum, item) => sum + (item.total || 0), 0)
-    : 0
+  // ─── Totals ───────────────────────────────────────────────────────────────
+  const totalRevenue = salesData.reduce((sum, item) => sum + (item.total || 0), 0)
+  const totalPcs = salesData.reduce((sum, item) =>
+    item.produkCategory === "Curah" ? sum : sum + (item.penjualanPcs || 0), 0)
+  const totalKarton = salesData.reduce((sum, item) =>
+    item.produkCategory === "Curah" ? sum : sum + (item.penjualanKarton || 0), 0)
+  const totalGram = salesData.reduce((sum, item) =>
+    item.produkCategory === "Curah" ? sum + (item.penjualanGram || 0) : sum, 0)
 
-  const totalPcs = Array.isArray(salesData)
-    ? salesData.reduce((sum, item) => {
-        if (item.produkCategory === "Curah") return sum
-        return sum + (item.penjualanPcs || 0)
-      }, 0)
-    : 0
-
-  const totalKarton = Array.isArray(salesData)
-    ? salesData.reduce((sum, item) => {
-        if (item.produkCategory === "Curah") return sum
-        return sum + (item.penjualanKarton || 0)
-      }, 0)
-    : 0
-
-  const totalGram = Array.isArray(salesData)
-    ? salesData.reduce((sum, item) => {
-        if (item.produkCategory === "Curah") {
-          return sum + (item.penjualanGram || 0)
-        }
-        return sum
-      }, 0)
-    : 0
-
-  // Theme Classes
+  // ─── Theme Classes ────────────────────────────────────────────────────────
   const bgClass =
     theme === "dark"
       ? "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
@@ -444,9 +382,11 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
   const tableBorder = theme === "dark" ? "border-slate-700/50" : "border-slate-200/70"
   const tableHeaderBg = theme === "dark" ? "bg-slate-700/50" : "bg-slate-100/80"
 
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className={`min-h-screen ${bgClass} p-6 transition-colors duration-300`}>
       <div className="max-w-7xl mx-auto space-y-6">
+
         {/* Toast Notifications */}
         <div className="fixed top-20 right-6 z-50 space-y-2">
           {toasts.map((toast) => (
@@ -479,12 +419,13 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-              {/* Periode Filter */}
+
+              {/* Periode */}
               <div className="space-y-2">
                 <Label className={textSecondary}>Periode</Label>
                 <select
                   value={filterPeriod}
-                  onChange={(e) => setFilterPeriod(e.target.value)}
+                  onChange={(e) => handlePeriodChange(e.target.value)}
                   className={`w-full h-10 px-3 py-2 text-sm ${inputBg} ${inputText} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
                 >
                   <option value="current-month">Bulan Ini</option>
@@ -493,7 +434,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 </select>
               </div>
 
-              {/* SPG Filter */}
+              {/* SPG */}
               <div className="space-y-2">
                 <Label className={textSecondary}>SPG</Label>
                 <select
@@ -502,12 +443,11 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                   className={`w-full h-10 px-3 py-2 text-sm ${inputBg} ${inputText} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
                 >
                   <option value="semua">Semua SPG</option>
-                  {Array.isArray(users) &&
-                    users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.nama}
-                      </option>
-                    ))}
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.nama}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -545,7 +485,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 />
               </div>
 
-              {/* Reset Button */}
+              {/* Reset */}
               <div className="space-y-2">
                 <Label className={`${textSecondary} opacity-0`}>Reset</Label>
                 <Button
@@ -562,7 +502,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 </Button>
               </div>
 
-              {/* Export Buttons */}
+              {/* Export */}
               <div className="space-y-2">
                 <Label className={`${textSecondary} opacity-0`}>Export</Label>
                 <div className="flex gap-2">
@@ -590,11 +530,17 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
               </div>
             </div>
 
-            {/* Delete Selected Bar */}
+            {/* Delete Bar */}
             {selectedIds.length > 0 && (
               <div className="mt-4 flex items-center justify-between p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                <span className={`text-sm ${textPrimary} font-medium`}>{selectedIds.length} data terpilih</span>
-                <Button onClick={handleDeleteSelected} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 text-white">
+                <span className={`text-sm ${textPrimary} font-medium`}>
+                  {selectedIds.length} data terpilih
+                </span>
+                <Button
+                  onClick={handleDeleteSelected}
+                  disabled={isDeleting}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
                   {isDeleting ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
@@ -614,95 +560,56 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {/* Total Transaksi */}
-          <Card
-            className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}
-          >
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
-            <CardContent className="relative p-5">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Transaksi</p>
-                  <h3 className={`text-2xl font-bold ${textPrimary}`}>{Array.isArray(salesData) ? salesData.length : 0}</h3>
+          {[
+            {
+              label: "Total Transaksi",
+              value: salesData.length.toLocaleString(),
+              icon: ShoppingCart,
+              gradient: "from-blue-500 to-cyan-500",
+            },
+            {
+              label: "Total Karton",
+              value: totalKarton.toLocaleString(),
+              icon: Package,
+              gradient: "from-purple-500 to-pink-500",
+            },
+            {
+              label: "Total Pack",
+              value: totalPcs.toLocaleString(),
+              icon: TrendingUp,
+              gradient: "from-orange-500 to-red-500",
+            },
+            {
+              label: "Total Gram",
+              value: totalGram.toLocaleString(),
+              icon: Weight,
+              gradient: "from-emerald-500 to-teal-500",
+            },
+            {
+              label: "Total Revenue",
+              value: `Rp ${totalRevenue.toLocaleString("id-ID")}`,
+              icon: DollarSign,
+              gradient: "from-indigo-500 to-purple-500",
+            },
+          ].map(({ label, value, icon: Icon, gradient }) => (
+            <Card
+              key={label}
+              className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}
+            >
+              <div className={`absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br ${gradient} rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity`} />
+              <CardContent className="relative p-5">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>{label}</p>
+                    <h3 className={`text-2xl font-bold ${textPrimary}`}>{value}</h3>
+                  </div>
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                  <ShoppingCart className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Total Karton */}
-          <Card
-            className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}
-          >
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
-            <CardContent className="relative p-5">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Karton</p>
-                  <h3 className={`text-2xl font-bold ${textPrimary}`}>{totalKarton.toLocaleString()}</h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-                  <Package className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Total Pack */}
-          <Card
-            className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}
-          >
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-orange-500 to-red-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
-            <CardContent className="relative p-5">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Pack</p>
-                  <h3 className={`text-2xl font-bold ${textPrimary}`}>{totalPcs.toLocaleString()}</h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg">
-                  <TrendingUp className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Total Gram */}
-          <Card
-            className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}
-          >
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
-            <CardContent className="relative p-5">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Gram</p>
-                  <h3 className={`text-2xl font-bold ${textPrimary}`}>{totalGram.toLocaleString()}</h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
-                  <Weight className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Total Revenue */}
-          <Card
-            className={`relative overflow-hidden ${cardBg} border ${cardBorder} backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group`}
-          >
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity" />
-            <CardContent className="relative p-5">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className={`text-xs font-medium ${textMuted} mb-1 uppercase tracking-wide`}>Total Revenue</p>
-                  <h3 className={`text-2xl font-bold ${textPrimary}`}>Rp {totalRevenue.toLocaleString("id-ID")}</h3>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
-                  <DollarSign className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Data Table */}
@@ -713,7 +620,9 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
           </CardHeader>
           <CardContent>
             {error && (
-              <div className="p-4 mb-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">{error}</div>
+              <div className="p-4 mb-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
+                {error}
+              </div>
             )}
 
             {loading ? (
@@ -721,46 +630,42 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 <div className="relative w-32 h-32 mx-auto mb-6">
                   <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 border-r-purple-500 animate-spin" />
                   <div
-                    className="absolute inset-2 rounded-full border-4 border-transparent border-b-pink-500 border-l-cyan-500 animate-spin-slow"
-                    style={{ animationDirection: "reverse" }}
+                    className="absolute inset-2 rounded-full border-4 border-transparent border-b-pink-500 border-l-cyan-500 animate-spin"
+                    style={{ animationDirection: "reverse", animationDuration: "3s" }}
                   />
                   <div className="absolute inset-4 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 animate-pulse" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <ShoppingCart className="w-12 h-12 text-white animate-bounce" />
                   </div>
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 blur-2xl opacity-50 animate-pulse" />
                 </div>
-                <div className="space-y-3">
-                  <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                    Memuat Data Penjualan
-                  </h3>
-                  <div className="flex items-center justify-center gap-1">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <div className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                  </div>
+                <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  Memuat Data Penjualan
+                </h3>
+                <div className="flex items-center justify-center gap-1 mt-3">
+                  {[0, 150, 300].map((delay) => (
+                    <div
+                      key={delay}
+                      className="w-2 h-2 rounded-full animate-bounce"
+                      style={{
+                        animationDelay: `${delay}ms`,
+                        backgroundColor: delay === 0 ? "#3b82f6" : delay === 150 ? "#a855f7" : "#ec4899",
+                      }}
+                    />
+                  ))}
                 </div>
-                <style jsx>{`
-                  @keyframes spin-slow {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                  }
-                  .animate-spin-slow {
-                    animation: spin-slow 3s linear infinite;
-                  }
-                `}</style>
               </div>
-            ) : !Array.isArray(salesData) || salesData.length === 0 ? (
+            ) : salesData.length === 0 ? (
               <div className="text-center py-12">
                 <ShoppingCart className={`w-16 h-16 ${textMuted} mx-auto mb-4`} />
                 <p className={textMuted}>Tidak ada data penjualan</p>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg">
-                <table className="w-full">
+              // will-change: transform helps GPU-accelerate scroll on large tables
+              <div className="overflow-x-auto rounded-lg" style={{ willChange: "scroll-position" }}>
+                <table className="w-full border-collapse">
                   <thead>
                     <tr className={`border-b ${tableBorder} ${tableHeaderBg}`}>
-                      <th className={`px-4 py-3 text-left`}>
+                      <th className="px-4 py-3 text-left sticky left-0 z-10">
                         <input
                           type="checkbox"
                           checked={salesData.length > 0 && selectedIds.length === salesData.length}
@@ -768,20 +673,17 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                           className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                         />
                       </th>
-                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Tanggal Input</th>
-                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Tanggal Transaksi</th>
-                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>SPG</th>
-                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Produk</th>
-                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Kategori</th>
-                      <th className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Toko</th>
-                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Pack</th>
-                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Karton</th>
-                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Harga Pack</th>
-                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Harga Karton</th>
-                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Stock Pack</th>
-                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Stock Karton</th>
-                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Total</th>
-                      <th className={`px-4 py-3 text-right text-xs font-semibold ${textSecondary} uppercase tracking-wider`}>Gram</th>
+                      {[
+                        "Tanggal Input","Tanggal Transaksi","SPG","Produk","Kategori","Toko",
+                        "Pack","Karton","Harga Pack","Harga Karton","Stock Pack","Stock Karton","Total","Gram",
+                      ].map((col) => (
+                        <th
+                          key={col}
+                          className={`px-4 py-3 text-left text-xs font-semibold ${textSecondary} uppercase tracking-wider whitespace-nowrap`}
+                        >
+                          {col}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -793,7 +695,9 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                       return (
                         <tr
                           key={item.id}
-                          className={`border-b ${tableBorder} ${tableHoverBg} transition-colors ${index % 2 === 0 ? tableBg : ""} ${isSelected ? "bg-blue-500/10" : ""}`}
+                          className={`border-b ${tableBorder} ${tableHoverBg} transition-colors ${
+                            index % 2 === 0 ? tableBg : ""
+                          } ${isSelected ? "bg-blue-500/10" : ""}`}
                         >
                           <td className="px-4 py-3">
                             <input
@@ -803,22 +707,20 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                               className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                             />
                           </td>
-                          <td className={`px-4 py-3 text-sm ${textSecondary}`}>
+                          <td className={`px-4 py-3 text-sm ${textSecondary} whitespace-nowrap`}>
                             {item.created_at
                               ? new Date(item.created_at).toLocaleString("id-ID", {
-                                  year: "numeric",
-                                  month: "2-digit",
-                                  day: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  hour12: false
+                                  year: "numeric", month: "2-digit", day: "2-digit",
+                                  hour: "2-digit", minute: "2-digit", hour12: false,
                                 })
                               : "-"}
                           </td>
-                          <td className={`px-4 py-3 text-sm ${textSecondary}`}>
+                          <td className={`px-4 py-3 text-sm ${textSecondary} whitespace-nowrap`}>
                             {item.tanggal ? new Date(item.tanggal).toLocaleDateString("id-ID") : "-"}
                           </td>
-                          <td className={`px-4 py-3 text-sm ${textPrimary} font-medium`}>{item.spgNama}</td>
+                          <td className={`px-4 py-3 text-sm ${textPrimary} font-medium whitespace-nowrap`}>
+                            {item.spgNama}
+                          </td>
                           <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.produk}</td>
                           <td className="px-4 py-3 text-sm">
                             <span
@@ -833,17 +735,41 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                             </span>
                           </td>
                           <td className={`px-4 py-3 text-sm ${textSecondary}`}>{item.toko}</td>
-                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>{isCurah ? "-" : item.penjualanPcs || 0}</td>
-                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>{isCurah ? "-" : item.penjualanKarton || 0}</td>
-                          <td className={`px-4 py-3 text-sm text-right ${textSecondary}`}>
-                            {isCurah ? <span className="font-semibold text-emerald-400">Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}</span> : <span>Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}</span>}
+                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+                            {isCurah ? "-" : item.penjualanPcs || 0}
                           </td>
-                          <td className={`px-4 py-3 text-sm text-right ${textSecondary}`}>{isCurah ? "-" : <span>Rp {(item.hargaKarton || 0).toLocaleString("id-ID")}</span>}</td>
-                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>{isCurah ? "-" : stockPack}</td>
-                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>{isCurah ? "-" : item.penjualanKarton || 0}</td>
-                          <td className="px-4 py-3 text-sm text-right font-semibold text-blue-400">Rp {(item.total || 0).toLocaleString("id-ID")}</td>
+                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+                            {isCurah ? "-" : item.penjualanKarton || 0}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textSecondary} whitespace-nowrap`}>
+                            {isCurah ? (
+                              <span className="font-semibold text-emerald-400">
+                                Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}
+                              </span>
+                            ) : (
+                              <span>Rp {(item.hargaPcs || 0).toLocaleString("id-ID")}</span>
+                            )}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textSecondary} whitespace-nowrap`}>
+                            {isCurah ? "-" : <span>Rp {(item.hargaKarton || 0).toLocaleString("id-ID")}</span>}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+                            {isCurah ? "-" : stockPack}
+                          </td>
+                          <td className={`px-4 py-3 text-sm text-right ${textPrimary}`}>
+                            {isCurah ? "-" : item.penjualanKarton || 0}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold text-blue-400 whitespace-nowrap">
+                            Rp {(item.total || 0).toLocaleString("id-ID")}
+                          </td>
                           <td className="px-4 py-3 text-sm text-right">
-                            {isCurah ? <span className="font-semibold text-emerald-400">{(item.penjualanGram || 0).toLocaleString()} gr</span> : "-"}
+                            {isCurah ? (
+                              <span className="font-semibold text-emerald-400">
+                                {(item.penjualanGram || 0).toLocaleString()} gr
+                              </span>
+                            ) : (
+                              "-"
+                            )}
                           </td>
                         </tr>
                       )
