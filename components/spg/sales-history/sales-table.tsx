@@ -292,26 +292,29 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
   }
 
   const displayError = error || localError
-  const filteredData = salesData.filter(row => {
-    const matchToko = filterToko === "semua" || row.namaTokoTransaksi === filterToko
-    const matchProduk = filterProduk === "semua" || row.produk === filterProduk
-    return matchToko && matchProduk
-  })
 
-  const latestStock = filteredData.length > 0 ? filteredData[0] : null
+  // ─── FIX: Filter + selalu sort by tanggal TRANSAKSI ascending ───
+  // List riwayat selalu tersusun rapi by tanggal transaksi (terlama → terbaru),
+  // tidak peduli filter dateFilterType yang dipilih (itu hanya untuk grafik & konteks tampilan)
+  const filteredData = salesData
+    .filter(row => {
+      const matchToko = filterToko === "semua" || row.namaTokoTransaksi === filterToko
+      const matchProduk = filterProduk === "semua" || row.produk === filterProduk
+      return matchToko && matchProduk
+    })
+    .sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime())
+
+  const latestStock = filteredData.length > 0 ? filteredData[filteredData.length - 1] : null
 
   const renderDataDisplay = (row: SalesData) => {
-    // Format tanggal transaksi
     const tanggalTransaksi = new Date(row.tanggal).toLocaleDateString("id-ID", {
       day: "2-digit", month: "short", year: "numeric"
     })
-    // Format tanggal input (createdAt)
     const tanggalInput = row.createdAt
       ? new Date(row.createdAt).toLocaleDateString("id-ID", {
           day: "2-digit", month: "short", year: "numeric"
         })
       : null
-    // Apakah tanggal transaksi dan input berbeda
     const isDifferentDate = tanggalInput && tanggalInput !== tanggalTransaksi
 
     return (
@@ -596,7 +599,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
               <h3 className={`text-xs sm:text-sm font-semibold ${classes.text}`}>Filter Transaksi</h3>
             </div>
 
-            {/* ===== FILTER TANGGAL TRANSAKSI / TANGGAL INPUT ===== */}
+            {/* Filter Tanggal Transaksi / Tanggal Input */}
             <div>
               <Label className={`text-xs ${classes.text} mb-1.5 block`}>📅 Tampilkan Berdasarkan</Label>
               <div className={`flex gap-1 p-1 rounded-lg ${classes.statBg} border ${classes.border} w-fit`}>
@@ -621,7 +624,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
               {dateFilterType === "createdAt" && (
                 <p className="text-xs text-amber-500 dark:text-amber-400 mt-1.5 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
-                  Grafik juga berubah ke tanggal input
+                  Grafik berubah ke tanggal input · List tetap urut tanggal transaksi
                 </p>
               )}
             </div>
