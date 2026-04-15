@@ -24,6 +24,47 @@ interface SalesStatsProps {
   dateFilterType?: "tanggal" | "createdAt"
 }
 
+// ─────────────────────────────────────────────
+// Helper: konversi JS Date → serial number Excel
+// Excel epoch: 1 Jan 1900 = 1 (dengan koreksi bug Lotus 1-2-3)
+// ─────────────────────────────────────────────
+function toExcelDateSerial(date: Date): number {
+  const excelEpoch = new Date(Date.UTC(1899, 11, 30)) // 30 Des 1899
+  const msPerDay = 86400000
+  return Math.floor((date.getTime() - excelEpoch.getTime()) / msPerDay)
+}
+
+// ─────────────────────────────────────────────
+// Gunakan fungsi ini saat export ke Excel (SheetJS / xlsx library)
+// Contoh penggunaan di luar komponen ini:
+//
+//   import * as XLSX from "xlsx"
+//
+//   const rows = salesData.map(sale => ({
+//     Tanggal: toExcelDateSerial(new Date(sale.tanggal)),  // ← serial number
+//     Total:   sale.total,
+//     Category: sale.category,
+//   }))
+//
+//   const ws = XLSX.utils.json_to_sheet(rows)
+//
+//   // Format kolom Tanggal sebagai Date
+//   const dateColRange = XLSX.utils.decode_range(ws["!ref"] || "A1")
+//   for (let R = dateColRange.s.r + 1; R <= dateColRange.e.r; R++) {
+//     const cellAddress = XLSX.utils.encode_cell({ r: R, c: 0 }) // kolom A = Tanggal
+//     if (ws[cellAddress]) {
+//       ws[cellAddress].t = "n"          // type: number
+//       ws[cellAddress].z = "DD/MM/YYYY" // format display
+//     }
+//   }
+//
+//   const wb = XLSX.utils.book_new()
+//   XLSX.utils.book_append_sheet(wb, ws, "Penjualan")
+//   XLSX.writeFile(wb, "laporan_penjualan.xlsx")
+// ─────────────────────────────────────────────
+
+export { toExcelDateSerial }
+
 export default function SalesStats({
   salesData,
   theme,
@@ -45,33 +86,56 @@ export default function SalesStats({
   const getChartData = () => {
     if (salesData.length === 0) return []
 
-    const groupedData: { [key: string]: number } = {}
+    // ─── FIX 1: Urutkan data berdasarkan tanggal ascending sebelum di-group ───
+    const sortedData = [...salesData].sort((a, b) => {
+      const dateA = new Date(dateFilterType === "createdAt" ? a.createdAt : a.tanggal).getTime()
+      const dateB = new Date(dateFilterType === "createdAt" ? b.createdAt : b.tanggal).getTime()
+      return dateA - dateB
+    })
 
-    salesData.forEach(sale => {
-      // Pilih field tanggal berdasarkan dateFilterType
+    // Gunakan Map agar urutan insert (= urutan tanggal) terjaga
+    const groupedData = new Map<string, { total: number; sortKey: number }>()
+
+    sortedData.forEach(sale => {
       const dateStr = dateFilterType === "createdAt" ? sale.createdAt : sale.tanggal
       const date = new Date(dateStr)
       let key = ""
+      let sortKey = date.getTime()
 
       switch (timeFilter) {
         case "daily":
-          key = date.toLocaleDateString("id-ID", { day: "2-digit", month: "short" })
+          // Normalisasi ke tengah malam agar semua jam dalam 1 hari tergabung
+          key = date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "2-digit" })
+          sortKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
           break
-        case "weekly":
-          key = `W${Math.ceil(date.getDate() / 7)} ${date.toLocaleDateString("id-ID", { month: "short" })}`
+        case "weekly": {
+          const weekNum = Math.ceil(date.getDate() / 7)
+          key = `W${weekNum} ${date.toLocaleDateString("id-ID", { month: "short", year: "2-digit" })}`
+          sortKey = new Date(date.getFullYear(), date.getMonth(), (weekNum - 1) * 7 + 1).getTime()
           break
+        }
         case "monthly":
           key = date.toLocaleDateString("id-ID", { month: "short", year: "numeric" })
+          sortKey = new Date(date.getFullYear(), date.getMonth(), 1).getTime()
           break
         case "yearly":
           key = date.getFullYear().toString()
+          sortKey = new Date(date.getFullYear(), 0, 1).getTime()
           break
       }
 
-      groupedData[key] = (groupedData[key] || 0) + sale.total
+      const existing = groupedData.get(key)
+      if (existing) {
+        existing.total += sale.total
+      } else {
+        groupedData.set(key, { total: sale.total, sortKey })
+      }
     })
 
-    return Object.entries(groupedData).map(([label, value]) => ({ label, value }))
+    // ─── FIX 2: Sort result Map berdasarkan sortKey ascending ───
+    return Array.from(groupedData.entries())
+      .sort((a, b) => a[1].sortKey - b[1].sortKey)
+      .map(([label, { total }]) => ({ label, value: total }))
   }
 
   const chartData = getChartData()
@@ -255,7 +319,9 @@ export default function SalesStats({
 
                       {(() => {
                         const points = chartData.map((data, index) => ({
-                          x: (index / (chartData.length - 1)) * 100,
+                          x: chartData.length === 1
+                            ? 50
+                            : (index / (chartData.length - 1)) * 100,
                           y: 100 - (data.value / maxValue) * 90,
                           value: data.value
                         }))
@@ -264,7 +330,7 @@ export default function SalesStats({
                           .map((point, i) => `${i === 0 ? 'M' : 'L'} ${point.x},${point.y}`)
                           .join(' ')
 
-                        const areaPath = `${linePath} L 100,100 L 0,100 Z`
+                        const areaPath = `${linePath} L ${points[points.length - 1].x},100 L ${points[0].x},100 Z`
 
                         return (
                           <>
