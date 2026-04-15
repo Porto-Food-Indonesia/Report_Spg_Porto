@@ -82,11 +82,18 @@ function formatInputDate(dateStr: string) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-// ✅ FIX: Format tanggal transaksi dengan leading zero: DD/MM/YYYY
+// Format tanggal transaksi dengan leading zero: DD/MM/YYYY
 function formatTxDate(dateStr: string) {
   if (!dateStr) return "-"
   const d = new Date(dateStr)
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
+}
+
+// ✅ FIX EXCEL: Parse string tanggal jadi Date object (supaya Excel auto-detect sebagai tanggal)
+function parseToDate(dateStr: string): Date | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  return isNaN(d.getTime()) ? null : d
 }
 
 // ─── Memoized Table Row ───────────────────────────────────────────────────────
@@ -402,20 +409,7 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     }
   }
 
-  // ✅ FIX: Helper format tanggal untuk export (DD/MM/YYYY dengan leading zero)
-  const formatExportDate = (dateStr: string): string => {
-    if (!dateStr) return "-"
-    const d = new Date(dateStr)
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
-  }
-
-  // ✅ FIX: Helper format datetime untuk export (DD/MM/YYYY HH:MM:SS dengan leading zero)
-  const formatExportDateTime = (dateStr: string): string => {
-    if (!dateStr) return "-"
-    const d = new Date(dateStr)
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  }
-
+  // ✅ FIX EXCEL: Export dengan Date object + format cell supaya Excel auto-detect tanggal
   const handleExportToExcel = () => {
     if (filteredData.length === 0) { showToast("Tidak ada data untuk diekspor", "error"); return }
     try {
@@ -424,10 +418,9 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
         const isCurah = (item.produkCategory || item.category || "") === "Curah"
         return {
           NO: index + 1,
-          // ✅ FIX: Pakai formatExportDateTime → DD/MM/YYYY HH:MM:SS (leading zero)
-          "TANGGAL INPUT": formatExportDateTime(item.created_at),
-          // ✅ FIX: Pakai formatExportDate → DD/MM/YYYY (leading zero)
-          "TANGGAL TRANSAKSI": formatExportDate(item.tanggal),
+          // ✅ Kirim Date object, bukan string → Excel auto-detect sebagai tanggal
+          "TANGGAL INPUT": parseToDate(item.created_at),
+          "TANGGAL TRANSAKSI": parseToDate(item.tanggal),
           NAMA: item.spgNama,
           PRODUK: item.produk,
           PACK: isCurah ? "-" : item.penjualanPcs || 0,
@@ -441,29 +434,62 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
           GRAM: isCurah ? item.penjualanGram || 0 : "-",
         }
       })
-      const ws = XLSX.utils.json_to_sheet(exportData)
-      ws["!cols"] = [{ wch: 5 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 30 }, { wch: 12 }]
+
+      // ✅ cellDates: true → XLSX tahu kolom berisi Date object
+      const ws = XLSX.utils.json_to_sheet(exportData, { cellDates: true })
+
+      // ✅ Set format tampilan tanggal di Excel per cell
+      // Kolom B (index 1) = TANGGAL INPUT → DD/MM/YYYY HH:MM:SS
+      // Kolom C (index 2) = TANGGAL TRANSAKSI → DD/MM/YYYY
+      const range = XLSX.utils.decode_range(ws["!ref"] || "A1")
+      for (let R = range.s.r + 1; R <= range.e.r; R++) {
+        const cellB = ws[XLSX.utils.encode_cell({ r: R, c: 1 })] // TANGGAL INPUT
+        const cellC = ws[XLSX.utils.encode_cell({ r: R, c: 2 })] // TANGGAL TRANSAKSI
+        if (cellB && cellB.t === "d") cellB.z = "DD/MM/YYYY HH:MM:SS"
+        if (cellC && cellC.t === "d") cellC.z = "DD/MM/YYYY"
+      }
+
+      ws["!cols"] = [
+        { wch: 5 }, { wch: 22 }, { wch: 18 }, { wch: 20 }, { wch: 25 },
+        { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 30 }, { wch: 12 },
+      ]
+
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, "LAPORAN PENJUALAN")
+
       const spgName = appliedSpg === "semua" ? "Semua_SPG" : users.find((u) => u.id === appliedSpg)?.nama || "SPG"
-      const dateRange = appliedStartDate && appliedEndDate ? `${appliedStartDate}_to_${appliedEndDate}` : new Date().toISOString().split("T")[0]
+      const dateRange = appliedStartDate && appliedEndDate
+        ? `${appliedStartDate}_to_${appliedEndDate}`
+        : new Date().toISOString().split("T")[0]
+
       XLSX.writeFile(wb, `LAPORAN_PENJUALAN_${spgName}_${dateRange}.xlsx`)
       showToast("Data berhasil diekspor ke Excel!", "success")
     } catch { showToast("Gagal mengekspor data", "error") }
   }
 
+  // CSV export (tetap pakai string — CSV tidak support format tanggal native)
   const handleExportToCSV = () => {
     if (filteredData.length === 0) { showToast("Tidak ada data untuk diekspor", "error"); return }
     try {
+      const formatExportDateTime = (dateStr: string): string => {
+        if (!dateStr) return "-"
+        const d = new Date(dateStr)
+        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+      }
+      const formatExportDate = (dateStr: string): string => {
+        if (!dateStr) return "-"
+        const d = new Date(dateStr)
+        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
+      }
+
       const headers = ["NO", "TANGGAL INPUT", "TANGGAL TRANSAKSI", "NAMA", "PRODUK", "PACK", "KARTON", "HARGA_PACK", "HARGA_KARTON", "STOCK_PACK", "STOCK_KARTON", "TOTAL_SELLOUT", "TOKO", "GRAM"]
       const rows = filteredData.map((item, index) => {
         const stockPack = (item.penjualanKarton || 0) * (item.produkPcsPerKarton || 1)
         const isCurah = (item.produkCategory || item.category || "") === "Curah"
         return [
           index + 1,
-          // ✅ FIX: Pakai formatExportDateTime → DD/MM/YYYY HH:MM:SS (leading zero)
           formatExportDateTime(item.created_at),
-          // ✅ FIX: Pakai formatExportDate → DD/MM/YYYY (leading zero)
           formatExportDate(item.tanggal),
           item.spgNama,
           item.produk,
@@ -480,14 +506,21 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
       })
       const csvContent = [
         headers.join(","),
-        ...rows.map((row) => row.map((cell) => { const s = String(cell); return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s }).join(",")),
+        ...rows.map((row) =>
+          row.map((cell) => {
+            const s = String(cell)
+            return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
+          }).join(",")
+        ),
       ].join("\n")
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
       const spgName = appliedSpg === "semua" ? "Semua_SPG" : users.find((u) => u.id === appliedSpg)?.nama || "SPG"
-      const dateRange = appliedStartDate && appliedEndDate ? `${appliedStartDate}_to_${appliedEndDate}` : new Date().toISOString().split("T")[0]
+      const dateRange = appliedStartDate && appliedEndDate
+        ? `${appliedStartDate}_to_${appliedEndDate}`
+        : new Date().toISOString().split("T")[0]
       link.download = `LAPORAN_PENJUALAN_${spgName}_${dateRange}.csv`
       document.body.appendChild(link); link.click(); document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
