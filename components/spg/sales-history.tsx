@@ -39,6 +39,7 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
   const [error, setError] = useState("")
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("daily")
   const [showChart, setShowChart] = useState(true)
+  const [dateFilterType, setDateFilterType] = useState<"tanggal" | "createdAt">("tanggal")
 
   useEffect(() => {
     if (!user || !user.id || isLoading) return
@@ -60,7 +61,6 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
         spgId: user!.id.toString(),
       })
 
-      // ✅ FIX: Tambah cache: 'no-store' agar data selalu fresh
       const response = await fetch(`/api/sales/list?${params.toString()}`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
@@ -86,7 +86,7 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
           total: item.total || 0,
           category: item.category || "Pack/Karton",
           notes: item.notes || "",
-          createdAt: item.created_at || item.tanggal,  // ✅ FIX: snake_case
+          createdAt: item.created_at || item.tanggal,
         }))
         setSalesData(transformed)
       } else {
@@ -129,8 +129,8 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
         </div>
         <div className="h-64 flex items-end gap-2">
           {[...Array(10)].map((_, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className={`flex-1 rounded-t-lg ${isDark ? 'bg-slate-700' : 'bg-slate-200'} animate-pulse`}
               style={{ height: `${Math.random() * 80 + 20}%` }}
             />
@@ -187,21 +187,24 @@ export default function SalesHistory({ theme }: SalesHistoryProps) {
 
   return (
     <div className="space-y-6 p-4 md:p-0">
-      <SalesStats 
+      <SalesStats
         salesData={salesData}
         theme={theme}
         timeFilter={timeFilter}
         setTimeFilter={setTimeFilter}
         showChart={showChart}
         setShowChart={setShowChart}
+        dateFilterType={dateFilterType}
       />
 
-      <SalesTable 
+      <SalesTable
         salesData={salesData}
         loading={loading}
         error={error}
         theme={theme}
         onRefresh={fetchSalesHistory}
+        dateFilterType={dateFilterType}
+        setDateFilterType={setDateFilterType}
       />
     </div>
   )
