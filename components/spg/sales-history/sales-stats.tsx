@@ -7,6 +7,7 @@ import { BarChart3, TrendingUp, TrendingDown, Calendar, LineChart, Eye, EyeOff }
 interface SalesData {
   id: string
   tanggal: string
+  createdAt: string
   total: number
   category: string
 }
@@ -20,19 +21,20 @@ interface SalesStatsProps {
   setTimeFilter?: (filter: TimeFilter) => void
   showChart?: boolean
   setShowChart?: (show: boolean) => void
+  dateFilterType?: "tanggal" | "createdAt"
 }
 
-export default function SalesStats({ 
-  salesData, 
-  theme, 
-  timeFilter = "daily", 
+export default function SalesStats({
+  salesData,
+  theme,
+  timeFilter = "daily",
   setTimeFilter = () => {},
   showChart = true,
-  setShowChart = () => {}
+  setShowChart = () => {},
+  dateFilterType = "tanggal",
 }: SalesStatsProps) {
   const isDark = theme === 'dark'
 
-  // Theme classes
   const cardBg = isDark ? "bg-slate-800/50 backdrop-blur border-slate-700" : "bg-white/80 backdrop-blur border-slate-200"
   const textClass = isDark ? "text-slate-100" : "text-slate-900"
   const textSecondary = isDark ? "text-slate-400" : "text-slate-600"
@@ -40,14 +42,15 @@ export default function SalesStats({
   const hoverBg = isDark ? "hover:bg-slate-700/50" : "hover:bg-slate-50"
   const statBg = isDark ? "bg-slate-700/50" : "bg-slate-50"
 
-  // Get chart data based on time filter
   const getChartData = () => {
     if (salesData.length === 0) return []
 
     const groupedData: { [key: string]: number } = {}
 
     salesData.forEach(sale => {
-      const date = new Date(sale.tanggal)
+      // Pilih field tanggal berdasarkan dateFilterType
+      const dateStr = dateFilterType === "createdAt" ? sale.createdAt : sale.tanggal
+      const date = new Date(dateStr)
       let key = ""
 
       switch (timeFilter) {
@@ -74,7 +77,6 @@ export default function SalesStats({
   const chartData = getChartData()
   const maxValue = Math.max(...chartData.map(d => d.value), 1)
 
-  // Calculate statistics
   const totalRevenue = salesData.reduce((sum, sale) => sum + sale.total, 0)
   const avgRevenue = salesData.length > 0 ? totalRevenue / salesData.length : 0
 
@@ -85,15 +87,14 @@ export default function SalesStats({
 
   if (salesData.length === 0) return null
 
-  // Stats Card Component
-  const StatsCard = ({ 
-    title, 
-    value, 
-    subtitle, 
-    icon: Icon, 
-    gradient, 
-    valueColor 
-  }: { 
+  const StatsCard = ({
+    title,
+    value,
+    subtitle,
+    icon: Icon,
+    gradient,
+    valueColor
+  }: {
     title: string
     value: string | number
     subtitle: string
@@ -153,10 +154,10 @@ export default function SalesStats({
           subtitle={trend === 'up' ? 'Naik' : trend === 'down' ? 'Turun' : 'Stabil'}
           icon={trend === 'up' ? TrendingUp : TrendingDown}
           gradient={`bg-gradient-to-br ${
-            trend === 'up' 
-              ? 'from-green-500 to-emerald-600' 
-              : trend === 'down' 
-              ? 'from-red-500 to-orange-600' 
+            trend === 'up'
+              ? 'from-green-500 to-emerald-600'
+              : trend === 'down'
+              ? 'from-red-500 to-orange-600'
               : 'from-amber-500 to-yellow-600'
           }`}
           valueColor={trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : textClass}
@@ -174,9 +175,12 @@ export default function SalesStats({
               </CardTitle>
               <CardDescription className={`${textSecondary} text-xs sm:text-sm mt-1`}>
                 Visualisasi performa penjualan Anda
+                {dateFilterType === "createdAt" && (
+                  <span className="ml-1 text-amber-500 font-medium">· Berdasarkan Tgl Input</span>
+                )}
               </CardDescription>
             </div>
-            
+
             <div className="flex items-center gap-2 justify-between sm:justify-end">
               {/* Toggle Chart Button */}
               <Button
@@ -229,9 +233,9 @@ export default function SalesStats({
                     {/* Grid Background */}
                     <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
                       {[...Array(5)].map((_, i) => (
-                        <div 
-                          key={i} 
-                          className={`w-full border-t ${borderClass} ${i === 0 ? 'border-transparent' : ''}`} 
+                        <div
+                          key={i}
+                          className={`w-full border-t ${borderClass} ${i === 0 ? 'border-transparent' : ''}`}
                         />
                       ))}
                     </div>
@@ -265,15 +269,15 @@ export default function SalesStats({
                         return (
                           <>
                             <path d={areaPath} fill="url(#areaGradient)" vectorEffect="non-scaling-stroke" />
-                            <path 
-                              d={linePath} 
-                              fill="none" 
-                              stroke="url(#lineGradient)" 
-                              strokeWidth="2" 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                              vectorEffect="non-scaling-stroke" 
-                              className="drop-shadow-lg" 
+                            <path
+                              d={linePath}
+                              fill="none"
+                              stroke="url(#lineGradient)"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              vectorEffect="non-scaling-stroke"
+                              className="drop-shadow-lg"
                             />
 
                             {points.map((point, index) => (
@@ -297,8 +301,8 @@ export default function SalesStats({
                     {/* Labels */}
                     <div className="absolute inset-0 flex justify-between items-end pointer-events-none px-4">
                       {chartData.map((data, index) => (
-                        <div 
-                          key={index} 
+                        <div
+                          key={index}
                           className="flex flex-col items-center gap-1"
                           style={{ width: `${100 / chartData.length}%` }}
                         >
@@ -324,8 +328,9 @@ export default function SalesStats({
                 <div className="flex items-center gap-2">
                   <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
                   <span className={textSecondary}>
-                    {timeFilter === "daily" ? "Per Hari" : 
-                     timeFilter === "weekly" ? "Per Minggu" : 
+                    {dateFilterType === "createdAt" ? "Tgl Input · " : "Tgl Transaksi · "}
+                    {timeFilter === "daily" ? "Per Hari" :
+                     timeFilter === "weekly" ? "Per Minggu" :
                      timeFilter === "monthly" ? "Per Bulan" : "Per Tahun"}
                   </span>
                 </div>
