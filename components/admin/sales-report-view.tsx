@@ -70,16 +70,23 @@ function getCurrentMonthRange() {
   }
 }
 
+// Helper pad angka jadi 2 digit (misal 3 → "03")
+function pad(n: number): string {
+  return String(n).padStart(2, "0")
+}
+
+// Format tanggal input: DD/MM/YYYY HH:MM
 function formatInputDate(dateStr: string) {
   if (!dateStr) return "-"
   const d = new Date(dateStr)
-  const pad = (n: number) => String(n).padStart(2, "0")
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+// ✅ FIX: Format tanggal transaksi dengan leading zero: DD/MM/YYYY
 function formatTxDate(dateStr: string) {
   if (!dateStr) return "-"
-  return new Date(dateStr).toLocaleDateString("id-ID")
+  const d = new Date(dateStr)
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
 // ─── Memoized Table Row ───────────────────────────────────────────────────────
@@ -395,6 +402,20 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     }
   }
 
+  // ✅ FIX: Helper format tanggal untuk export (DD/MM/YYYY dengan leading zero)
+  const formatExportDate = (dateStr: string): string => {
+    if (!dateStr) return "-"
+    const d = new Date(dateStr)
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
+  }
+
+  // ✅ FIX: Helper format datetime untuk export (DD/MM/YYYY HH:MM:SS dengan leading zero)
+  const formatExportDateTime = (dateStr: string): string => {
+    if (!dateStr) return "-"
+    const d = new Date(dateStr)
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  }
+
   const handleExportToExcel = () => {
     if (filteredData.length === 0) { showToast("Tidak ada data untuk diekspor", "error"); return }
     try {
@@ -403,9 +424,12 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
         const isCurah = (item.produkCategory || item.category || "") === "Curah"
         return {
           NO: index + 1,
-          "TANGGAL INPUT": item.created_at ? new Date(item.created_at).toLocaleString("id-ID", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "-",
-          "TANGGAL TRANSAKSI": item.tanggal ? new Date(item.tanggal).toLocaleDateString("id-ID") : "-",
-          NAMA: item.spgNama, PRODUK: item.produk,
+          // ✅ FIX: Pakai formatExportDateTime → DD/MM/YYYY HH:MM:SS (leading zero)
+          "TANGGAL INPUT": formatExportDateTime(item.created_at),
+          // ✅ FIX: Pakai formatExportDate → DD/MM/YYYY (leading zero)
+          "TANGGAL TRANSAKSI": formatExportDate(item.tanggal),
+          NAMA: item.spgNama,
+          PRODUK: item.produk,
           PACK: isCurah ? "-" : item.penjualanPcs || 0,
           KARTON: isCurah ? "-" : item.penjualanKarton || 0,
           HARGA_PACK: item.hargaPcs || 0,
@@ -437,16 +461,20 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
         const isCurah = (item.produkCategory || item.category || "") === "Curah"
         return [
           index + 1,
-          item.created_at ? new Date(item.created_at).toLocaleString("id-ID", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "-",
-          item.tanggal ? new Date(item.tanggal).toLocaleDateString("id-ID") : "-",
-          item.spgNama, item.produk,
+          // ✅ FIX: Pakai formatExportDateTime → DD/MM/YYYY HH:MM:SS (leading zero)
+          formatExportDateTime(item.created_at),
+          // ✅ FIX: Pakai formatExportDate → DD/MM/YYYY (leading zero)
+          formatExportDate(item.tanggal),
+          item.spgNama,
+          item.produk,
           isCurah ? "-" : item.penjualanPcs || 0,
           isCurah ? "-" : item.penjualanKarton || 0,
           item.hargaPcs || 0,
           isCurah ? "-" : item.hargaKarton || 0,
           isCurah ? "-" : stockPack,
           isCurah ? "-" : item.penjualanKarton || 0,
-          item.total || 0, item.toko || "-",
+          item.total || 0,
+          item.toko || "-",
           isCurah ? item.penjualanGram || 0 : "-",
         ]
       })
@@ -600,9 +628,9 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
                 <Filter className="w-3 h-3 flex-shrink-0" />
                 {(appliedStartDate || appliedEndDate) && (
                   <span className={`px-2 py-0.5 rounded-full border ${theme === "dark" ? "border-slate-600 bg-slate-700/50" : "border-slate-300 bg-slate-100"} ${textSecondary}`}>
-                    📅 {appliedStartDate ? new Date(appliedStartDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Awal"}
+                    📅 {appliedStartDate ? new Date(appliedStartDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "Awal"}
                     {" → "}
-                    {appliedEndDate ? new Date(appliedEndDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Akhir"}
+                    {appliedEndDate ? new Date(appliedEndDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "Akhir"}
                   </span>
                 )}
                 {appliedSpg !== "semua" && (
