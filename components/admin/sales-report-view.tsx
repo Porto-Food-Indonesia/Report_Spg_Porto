@@ -304,14 +304,20 @@ export default function SalesReportView({ theme }: SalesReportViewProps) {
     return Array.from(s).sort()
   }, [salesData])
 
-  // Client-side filtered data
+  // Client-side filtered + sorted data (sorted ascending by tanggal transaksi)
   const filteredData = useMemo(() => {
-    return salesData.filter((item) => {
-      if (filterToko !== "semua" && item.toko !== filterToko) return false
-      if (filterKategori === "Curah" && (item.produkCategory || item.category || "") !== "Curah") return false
-      if (filterKategori === "Pack" && (item.produkCategory || item.category || "") === "Curah") return false
-      return true
-    })
+    return salesData
+      .filter((item) => {
+        if (filterToko !== "semua" && item.toko !== filterToko) return false
+        if (filterKategori === "Curah" && (item.produkCategory || item.category || "") !== "Curah") return false
+        if (filterKategori === "Pack" && (item.produkCategory || item.category || "") === "Curah") return false
+        return true
+      })
+      .sort((a, b) => {
+        const dateA = a.tanggal ? new Date(a.tanggal).getTime() : 0
+        const dateB = b.tanggal ? new Date(b.tanggal).getTime() : 0
+        return dateA - dateB
+      })
   }, [salesData, filterToko, filterKategori])
 
   // Totals
