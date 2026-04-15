@@ -33,9 +33,10 @@ interface SalesTableProps {
   error: string
   theme: "dark" | "light"
   onRefresh: () => void
+  dateFilterType: "tanggal" | "createdAt"
+  setDateFilterType: (v: "tanggal" | "createdAt") => void
 }
 
-// ✅ FIX: FormInput dipindah ke LUAR component SalesTable
 interface FormInputProps {
   label: string
   type?: string
@@ -64,7 +65,7 @@ const FormInput = ({ label, type = "text", field, placeholder, max, editForm, se
   </div>
 )
 
-export default function SalesTable({ salesData, loading, error, theme, onRefresh }: SalesTableProps) {
+export default function SalesTable({ salesData, loading, error, theme, onRefresh, dateFilterType, setDateFilterType }: SalesTableProps) {
   const isDark = theme === 'dark'
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Record<string, string>>({
@@ -86,7 +87,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
   const [notifMessage, setNotifMessage] = useState("")
   const [filterToko, setFilterToko] = useState<string>("semua")
   const [filterProduk, setFilterProduk] = useState<string>("semua")
-  
+
   const [showStoreSelectModal, setShowStoreSelectModal] = useState(false)
   const [storeSearchQuery, setStoreSearchQuery] = useState("")
   const [masterStores, setMasterStores] = useState<string[]>([])
@@ -107,8 +108,8 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
 
   const uniqueToko = Array.from(new Set(salesData.map(s => s.namaTokoTransaksi))).sort()
   const uniqueProduk = Array.from(new Set(salesData.map(s => s.produk))).sort()
-  
-  const filteredStores = masterStores.filter(store => 
+
+  const filteredStores = masterStores.filter(store =>
     store.toLowerCase().includes(storeSearchQuery.toLowerCase())
   )
 
@@ -120,7 +121,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
         headers: { 'Cache-Control': 'no-cache' }
       })
       const result = await response.json()
-      
+
       if (result.success && Array.isArray(result.data)) {
         const storeNames = result.data.map((toko: any) => toko.nama).sort()
         setMasterStores(storeNames)
@@ -199,7 +200,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
     if (editingId) {
       const row = salesData.find(r => r.id === editingId)
       if (!row) return
-      
+
       const karton = editForm.penjualanKarton !== "" ? Number(editForm.penjualanKarton) : row.penjualanKarton
       const pack = editForm.penjualanPcs !== "" ? Number(editForm.penjualanPcs) : row.penjualanPcs
       const hargaKarton = editForm.hargaKarton !== "" ? Number(editForm.hargaKarton) : row.hargaKarton
@@ -212,13 +213,13 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
 
   const handleSave = async () => {
     if (!editingId) return
-    
+
     try {
       setSaving(true)
       setLocalError("")
-      
+
       const payload: any = { id: editingId }
-      
+
       if (editForm.tanggal !== '') {
         if (!validateDate(editForm.tanggal)) {
           setLocalError("Tanggal tidak valid. Maksimal 7 hari yang lalu dan tidak boleh tanggal masa depan.")
@@ -227,7 +228,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
         }
         payload.tanggal = editForm.tanggal
       }
-      
+
       if (editForm.penjualanKarton !== '') {
         const val = Number(editForm.penjualanKarton)
         if (!isNaN(val) && val >= 0) payload.penjualanKarton = val
@@ -299,79 +300,104 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
 
   const latestStock = filteredData.length > 0 ? filteredData[0] : null
 
-  // ✅ FIX: DataDisplay dipindah ke LUAR juga agar tidak re-render
-  const renderDataDisplay = (row: SalesData) => (
-    <>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`text-xs font-semibold ${classes.text}`}>
-              {new Date(row.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
-            </span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-              row.category === "Curah" 
-                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
-                : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-            }`}>
-              {row.category}
-            </span>
+  const renderDataDisplay = (row: SalesData) => {
+    // Format tanggal transaksi
+    const tanggalTransaksi = new Date(row.tanggal).toLocaleDateString("id-ID", {
+      day: "2-digit", month: "short", year: "numeric"
+    })
+    // Format tanggal input (createdAt)
+    const tanggalInput = row.createdAt
+      ? new Date(row.createdAt).toLocaleDateString("id-ID", {
+          day: "2-digit", month: "short", year: "numeric"
+        })
+      : null
+    // Apakah tanggal transaksi dan input berbeda
+    const isDifferentDate = tanggalInput && tanggalInput !== tanggalTransaksi
+
+    return (
+      <>
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+              {/* Tanggal Transaksi */}
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                <span className={`text-xs font-semibold ${classes.text}`}>
+                  {tanggalTransaksi}
+                </span>
+              </div>
+              {/* Tanggal Input (hanya tampil jika berbeda dari tanggal transaksi) */}
+              {isDifferentDate && (
+                <div className="flex items-center gap-1">
+                  <span className={`text-xs ${classes.textSecondary}`}>·</span>
+                  <span className={`text-xs ${classes.textSecondary}`}>Input:</span>
+                  <span className={`text-xs ${classes.textSecondary}`}>{tanggalInput}</span>
+                </div>
+              )}
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                row.category === "Curah"
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+              }`}>
+                {row.category}
+              </span>
+            </div>
+            <h4 className={`font-semibold ${classes.text} mb-1`}>{row.produk}</h4>
+            <p className={`text-xs ${classes.textSecondary}`}>{row.namaTokoTransaksi}</p>
           </div>
-          <h4 className={`font-semibold ${classes.text} mb-1`}>{row.produk}</h4>
-          <p className={`text-xs ${classes.textSecondary}`}>{row.namaTokoTransaksi}</p>
+          {canEdit(row.createdAt) ? (
+            <Button size="sm" variant="ghost" onClick={() => handleEdit(row)} className={`h-8 w-8 p-0 ${classes.hoverBg} flex-shrink-0`}>
+              <Edit2 className="w-4 h-4 text-blue-500" />
+            </Button>
+          ) : (
+            <span className="text-xs text-slate-400 flex-shrink-0">🔒</span>
+          )}
         </div>
-        {canEdit(row.createdAt) ? (
-          <Button size="sm" variant="ghost" onClick={() => handleEdit(row)} className={`h-8 w-8 p-0 ${classes.hoverBg} flex-shrink-0`}>
-            <Edit2 className="w-4 h-4 text-blue-500" />
-          </Button>
-        ) : (
-          <span className="text-xs text-slate-400 flex-shrink-0">🔒</span>
-        )}
-      </div>
 
-      <div className={`grid grid-cols-2 gap-2 text-xs pt-2 border-t ${classes.border}`}>
-        {row.category !== "Curah" ? (
-          <>
-            <div><span className={classes.textSecondary}>Karton:</span><p className={`font-semibold ${classes.text}`}>{row.penjualanKarton}</p></div>
-            <div><span className={classes.textSecondary}>Pack:</span><p className={`font-semibold ${classes.text}`}>{row.penjualanPcs}</p></div>
-            <div><span className={classes.textSecondary}>Harga/Karton:</span><p className={classes.textSecondary}>Rp {row.hargaKarton.toLocaleString("id-ID")}</p></div>
-            <div><span className={classes.textSecondary}>Harga/Pack:</span><p className={classes.textSecondary}>Rp {row.hargaPcs.toLocaleString("id-ID")}</p></div>
-            <div><span className={classes.textSecondary}>Stock Pack:</span><p className={`font-medium ${row.stockPack < 10 ? 'text-red-500' : 'text-amber-600'}`}>{row.stockPack}</p></div>
-            <div><span className={classes.textSecondary}>Stock Karton:</span><p className={`font-medium ${row.stockKarton < 5 ? 'text-red-500' : 'text-amber-600'}`}>{row.stockKarton}</p></div>
-          </>
-        ) : (
-          <div className="col-span-2"><span className={classes.textSecondary}>Penjualan:</span><p className="font-semibold text-green-600">{row.penjualanGram}g</p></div>
-        )}
-      </div>
-
-      {row.notes && (
-        <div className={`text-xs pt-2 border-t ${classes.border} mt-2`}>
-          <span className={classes.textSecondary}>Catatan:</span>
-          <p className={`${classes.text} mt-1`}>{row.notes}</p>
+        <div className={`grid grid-cols-2 gap-2 text-xs pt-2 border-t ${classes.border}`}>
+          {row.category !== "Curah" ? (
+            <>
+              <div><span className={classes.textSecondary}>Karton:</span><p className={`font-semibold ${classes.text}`}>{row.penjualanKarton}</p></div>
+              <div><span className={classes.textSecondary}>Pack:</span><p className={`font-semibold ${classes.text}`}>{row.penjualanPcs}</p></div>
+              <div><span className={classes.textSecondary}>Harga/Karton:</span><p className={classes.textSecondary}>Rp {row.hargaKarton.toLocaleString("id-ID")}</p></div>
+              <div><span className={classes.textSecondary}>Harga/Pack:</span><p className={classes.textSecondary}>Rp {row.hargaPcs.toLocaleString("id-ID")}</p></div>
+              <div><span className={classes.textSecondary}>Stock Pack:</span><p className={`font-medium ${row.stockPack < 10 ? 'text-red-500' : 'text-amber-600'}`}>{row.stockPack}</p></div>
+              <div><span className={classes.textSecondary}>Stock Karton:</span><p className={`font-medium ${row.stockKarton < 5 ? 'text-red-500' : 'text-amber-600'}`}>{row.stockKarton}</p></div>
+            </>
+          ) : (
+            <div className="col-span-2"><span className={classes.textSecondary}>Penjualan:</span><p className="font-semibold text-green-600">{row.penjualanGram}g</p></div>
+          )}
         </div>
-      )}
 
-      <div className={`flex justify-between items-center pt-2 border-t ${classes.border} mt-2`}>
-        <span className={`text-xs ${classes.textSecondary}`}>Total:</span>
-        <span className="text-lg font-bold text-green-600">Rp {row.total.toLocaleString("id-ID")}</span>
-      </div>
-    </>
-  )
+        {row.notes && (
+          <div className={`text-xs pt-2 border-t ${classes.border} mt-2`}>
+            <span className={classes.textSecondary}>Catatan:</span>
+            <p className={`${classes.text} mt-1`}>{row.notes}</p>
+          </div>
+        )}
 
-  // ✅ FIX: EditFields juga dijadikan render function bukan component
+        <div className={`flex justify-between items-center pt-2 border-t ${classes.border} mt-2`}>
+          <span className={`text-xs ${classes.textSecondary}`}>Total:</span>
+          <span className="text-lg font-bold text-green-600">Rp {row.total.toLocaleString("id-ID")}</span>
+        </div>
+      </>
+    )
+  }
+
   const renderEditFields = (row: SalesData) => {
     const today = new Date()
     const maxDate = today.toISOString().split('T')[0]
     const minDateObj = new Date(today)
     minDateObj.setDate(minDateObj.getDate() - 7)
     const minDate = minDateObj.toISOString().split('T')[0]
-    
-    const currentDateFormatted = new Date(row.tanggal).toLocaleDateString("id-ID", { 
+
+    const currentDateFormatted = new Date(row.tanggal).toLocaleDateString("id-ID", {
       weekday: 'long',
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
     })
-    
+
     return (
       <div className="space-y-3">
         <div>
@@ -405,14 +431,14 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
             Maksimal 7 hari yang lalu
           </p>
         </div>
-        
+
         <FormInput label="Penjualan Karton" type="number" field="penjualanKarton" placeholder={`Sekarang: ${row.penjualanKarton}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
         <FormInput label="Penjualan Pack" type="number" field="penjualanPcs" placeholder={`Sekarang: ${row.penjualanPcs}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
         <FormInput label="Harga/Karton" type="number" field="hargaKarton" placeholder={`Sekarang: ${row.hargaKarton}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
         <FormInput label="Harga/Pack" type="number" field="hargaPcs" placeholder={`Sekarang: ${row.hargaPcs}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
         <FormInput label="Stock Pack" type="number" field="stockPack" placeholder={`Sekarang: ${row.stockPack}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
         <FormInput label="Stock Karton" type="number" field="stockKarton" placeholder={`Sekarang: ${row.stockKarton}`} editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
-        
+
         <div>
           <Label className={`text-xs ${classes.text} mb-1.5 block`}>
             🏪 Nama Toko <span className="text-slate-400">(opsional)</span>
@@ -428,7 +454,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
             <Store className="w-4 h-4 text-slate-400" />
           </button>
         </div>
-        
+
         <FormInput label="Catatan" field="notes" placeholder="Tambahkan catatan..." editForm={editForm} setEditForm={setEditForm} inputBg={classes.inputBg} textClass={classes.text} />
       </div>
     )
@@ -438,11 +464,11 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
     <>
       {/* Modal Pilih Toko */}
       {showStoreSelectModal && (
-        <div 
+        <div
           className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${classes.overlayBg} backdrop-blur-sm animate-in fade-in duration-200`}
           onClick={() => { setShowStoreSelectModal(false); setStoreSearchQuery("") }}
         >
-          <div 
+          <div
             className={`${classes.modalBg} rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mx-0 sm:mx-4 border-2 animate-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] sm:max-h-[80vh] flex flex-col`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -569,7 +595,38 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
               <BarChart3 className="w-4 h-4 text-blue-500" />
               <h3 className={`text-xs sm:text-sm font-semibold ${classes.text}`}>Filter Transaksi</h3>
             </div>
-            
+
+            {/* ===== FILTER TANGGAL TRANSAKSI / TANGGAL INPUT ===== */}
+            <div>
+              <Label className={`text-xs ${classes.text} mb-1.5 block`}>📅 Tampilkan Berdasarkan</Label>
+              <div className={`flex gap-1 p-1 rounded-lg ${classes.statBg} border ${classes.border} w-fit`}>
+                {[
+                  { value: "tanggal", label: "Tgl Transaksi", icon: "🧾" },
+                  { value: "createdAt", label: "Tgl Input", icon: "⌨️" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setDateFilterType(opt.value as "tanggal" | "createdAt")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                      dateFilterType === opt.value
+                        ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg"
+                        : `${classes.textSecondary} ${classes.hoverBg}`
+                    }`}
+                  >
+                    <span>{opt.icon}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+              {dateFilterType === "createdAt" && (
+                <p className="text-xs text-amber-500 dark:text-amber-400 mt-1.5 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Grafik juga berubah ke tanggal input
+                </p>
+              )}
+            </div>
+
+            {/* Filter Toko & Produk */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className={`text-xs ${classes.text} mb-1.5 block`}>🏪 Nama Toko</Label>
@@ -644,7 +701,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
                     {editingId === row.id ? (
                       <div className={`space-y-3 ${isDark ? 'bg-blue-900/20' : 'bg-blue-50'} p-3 rounded-lg -m-4`}>
                         {renderEditFields(row)}
-                        
+
                         {editResult && (
                           <div className={`text-xs ${isDark ? 'bg-slate-700' : 'bg-white'} p-3 rounded-lg ${classes.border} border`}>
                             <div className="space-y-2">
@@ -656,7 +713,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
                             </div>
                           </div>
                         )}
-                        
+
                         <div className="flex gap-2">
                           <Button size="sm" onClick={handleSave} disabled={saving} className="flex-1 h-9 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}Simpan
@@ -665,7 +722,7 @@ export default function SalesTable({ salesData, loading, error, theme, onRefresh
                             <X className="w-4 h-4 mr-1" />Batal
                           </Button>
                         </div>
-                        
+
                         <p className={`text-xs ${classes.textSecondary} italic text-center`}>💡 Isi hanya field yang ingin diubah, sisanya kosongkan</p>
                       </div>
                     ) : (
